@@ -3,3 +3,14 @@ packages:
 
 allowBuilds:
   esbuild: true
+
+# undici is transitive and split across majors: @actions/http-client stays on
+# 6.x, while @semantic-release/github and @yao-pkg/pkg-fetch stay on 7.x.
+# Dependabot cannot pin the 6.28.0 advisory fix to 6.29.1, because an unpinned
+# pnpm update also resolves the 7.x line and the job fails with
+# dependency_file_not_resolvable. Hold each parent on the patched release its
+# declared range allows.
+overrides:
+  "@actions/http-client>undici": "6.29.1"
+  "@semantic-release/github>undici": "7.30.1"
+  "@yao-pkg/pkg-fetch>undici": "7.30.1"

@@ -12,13 +12,24 @@ const directories: string[] = [];
 
 // Execute the actual workflow's shell blocks offline. Their env expressions
 // are outside the run blocks; the fixture supplies those values explicitly.
-function runBlock(name: string) {
-  const start = workflow.indexOf(`      - name: ${name}\n`);
-  if (start === -1) throw new Error(`Missing workflow step: ${name}`);
-  const next = workflow.indexOf('      - name:', start + 1);
-  const step = workflow.slice(start, next === -1 ? undefined : next);
+// `job` is required when two jobs share a step name, such as Git identity.
+function jobBody(job: string): string {
+  const header = `\n  ${job}:\n`;
+  const start = workflow.indexOf(header);
+  if (start === -1) throw new Error(`Missing workflow job: ${job}`);
+  const bodyStart = start + header.length;
+  const next = workflow.slice(bodyStart).search(/\n  [a-z0-9-]+:\n/);
+  return next === -1 ? workflow.slice(bodyStart) : workflow.slice(bodyStart, bodyStart + next);
+}
+
+function runBlock(name: string, job?: string) {
+  const source = job ? jobBody(job) : workflow;
+  const start = source.indexOf(`      - name: ${name}\n`);
+  if (start === -1) throw new Error(`Missing workflow step: ${job ? `${job} / ` : ''}${name}`);
+  const next = source.indexOf('      - name:', start + 1);
+  const step = source.slice(start, next === -1 ? undefined : next);
   const block = step.split('        run: |\n')[1];
-  if (!block) throw new Error(`Missing run block: ${name}`);
+  if (!block) throw new Error(`Missing run block: ${job ? `${job} / ` : ''}${name}`);
   return block.split('\n').map(line => line.startsWith('          ') ? line.slice(10) : line).join('\n');
 }
 
@@ -63,6 +74,18 @@ if (args.slice(0, 8).join(' ') !== '--retry 24 --retry-delay 15 --retry-max-time
 if (process.env.MOCK_HTTP_ERROR === '1') process.exit(22);
 fs.writeFileSync(args[10], 'published archive');
 `, { mode: 0o755 });
+  writeFileSync(join(bin, 'gh'), `#!/usr/bin/env node
+import fs from 'node:fs';
+import path from 'node:path';
+const args = process.argv.slice(2);
+fs.appendFileSync(path.join(process.env.MOCK_ROOT, 'gh-calls.jsonl'), JSON.stringify(args) + '\\n');
+if (process.env.MOCK_GH_FAILURE === '1') process.exit(1);
+if (args[0] === 'api' && args[2] === '--jq' && args[3] === '.id' && /^\\/users\\/.+\\[bot\\]$/.test(args[1])) {
+  console.log(process.env.MOCK_BOT_ID || '4242');
+  process.exit(0);
+}
+process.exit(99);
+`, { mode: 0o755 });
   writeFileSync(join(bin, 'git'), `#!/usr/bin/env node
 import fs from 'node:fs';
 import path from 'node:path';
@@ -90,7 +113,7 @@ else if (args[0] === 'push' && process.env.MOCK_PUSH_FAILURE === '1') process.ex
   return {
     directory,
     original,
-    run: (name: string) => spawnSync('bash', ['-e', '-o', 'pipefail', '-c', runBlock(name)], { cwd: directory, env, encoding: 'utf8' }),
+    run: (name: string, job?: string) => spawnSync('bash', ['-e', '-o', 'pipefail', '-c', runBlock(name, job)], { cwd: directory, env, encoding: 'utf8' }),
   };
 }
 
@@ -241,5 +264,62 @@ describe('org GitHub App token', () => {
     expect(tapJob).toContain('GITHUB_TOKEN: ${{ steps.app.outputs.token || secrets.GH_TOKEN }}');
     expect(tapJob).not.toContain('steps.app.outputs.token || secrets.GH_TOKEN || github.token');
     expect(tapJob).toContain('git commit -m "chore: update gh-manager-cli to ${VERSION}"');
+    expect(semanticJob).toContain("if: steps.app.outputs.token != ''");
+    expect(tapJob).toContain("if: steps.app.outputs.token != ''");
+  });
+
+  it('sets the semantic-release author from the App bot lookup', () => {
+    const f = fixture({ SLUG: 'stealth-factory-ci', MOCK_BOT_ID: '4242' });
+    const result = f.run('Git identity', 'semantic-release');
+    expect(result.status).toBe(0);
+    expect(result.stderr).toBe('');
+    const ghCalls = readFileSync(join(f.directory, 'gh-calls.jsonl'), 'utf8');
+    expect(ghCalls).toContain('"/users/stealth-factory-ci[bot]"');
+    const gitCalls = readFileSync(join(f.directory, 'git-calls.jsonl'), 'utf8');
+    expect(gitCalls).toContain('["config","user.name","stealth-factory-ci[bot]"]');
+    expect(gitCalls).toContain('["config","user.email","4242+stealth-factory-ci[bot]@users.noreply.github.com"]');
+    expect(gitCalls).not.toContain('"--global"');
+    expect(readFileSync(join(f.directory, 'github-env'), 'utf8')).toBe(
+      'GIT_AUTHOR_NAME=stealth-factory-ci[bot]\n' +
+      'GIT_AUTHOR_EMAIL=4242+stealth-factory-ci[bot]@users.noreply.github.com\n' +
+      'GIT_COMMITTER_NAME=stealth-factory-ci[bot]\n' +
+      'GIT_COMMITTER_EMAIL=4242+stealth-factory-ci[bot]@users.noreply.github.com\n',
+    );
+  });
+
+  it('sets the tap committer from the App bot lookup, globally for the clone', () => {
+    const f = fixture({ SLUG: 'stealth-factory-ci', MOCK_BOT_ID: '4242' });
+    expect(f.run('Git identity', 'publish-extras').status).toBe(0);
+    const ghCalls = readFileSync(join(f.directory, 'gh-calls.jsonl'), 'utf8');
+    expect(ghCalls).toContain('"/users/stealth-factory-ci[bot]"');
+    const gitCalls = readFileSync(join(f.directory, 'git-calls.jsonl'), 'utf8');
+    expect(gitCalls).toContain('["config","--global","user.name","stealth-factory-ci[bot]"]');
+    expect(gitCalls).toContain('["config","--global","user.email","4242+stealth-factory-ci[bot]@users.noreply.github.com"]');
+    expect(existsSync(join(f.directory, 'github-env'))).toBe(false);
+  });
+
+  it('stops the release identity when the App bot lookup fails', () => {
+    const f = fixture({ SLUG: 'stealth-factory-ci', MOCK_GH_FAILURE: '1' });
+    expect(f.run('Git identity', 'semantic-release').status).not.toBe(0);
+    expect(existsSync(join(f.directory, 'github-env'))).toBe(false);
+  });
+
+  it('keeps github-actions[bot] on the tap when the App token is absent', () => {
+    const f = fixture({ APP_TOKEN: '' });
+    expect(f.run('Update Homebrew Tap', 'publish-extras').status).toBe(0);
+    const calls = readFileSync(join(f.directory, 'git-calls.jsonl'), 'utf8');
+    expect(calls).toContain('["config","--global","user.name","github-actions[bot]"]');
+    expect(calls).toContain('["config","--global","user.email","github-actions[bot]@users.noreply.github.com"]');
+    expect(calls).toContain('x-access-token:offline-tap-token@github.com/stealth-factory/homebrew-tap.git');
+    expect(existsSync(join(f.directory, 'gh-calls.jsonl'))).toBe(false);
+  });
+
+  it('does not overwrite the App committer when the tap token is present', () => {
+    const f = fixture({ APP_TOKEN: 'app-token', GITHUB_TOKEN: 'app-token' });
+    expect(f.run('Update Homebrew Tap', 'publish-extras').status).toBe(0);
+    const calls = readFileSync(join(f.directory, 'git-calls.jsonl'), 'utf8');
+    expect(calls).not.toContain('github-actions[bot]');
+    expect(calls).toContain('x-access-token:app-token@github.com/stealth-factory/homebrew-tap.git');
+    expect(existsSync(join(f.directory, 'gh-calls.jsonl'))).toBe(false);
   });
 });

@@ -8,7 +8,8 @@ on:
 jobs:
   # Run semantic-release to create version, changelog, and tag
   semantic-release:
-    # Only run if NOT a release commit
+    # Skip release commits. An App-token push of `chore(release):` must start
+    # phase 2 and must not run semantic-release again.
     if: ${{ !startsWith(github.event.head_commit.message, 'chore(release):') }}
     runs-on: ubuntu-latest
     outputs:
@@ -21,11 +22,37 @@ jobs:
       packages: write
       id-token: write # npm trusted publishing for gh-manager-cli
     steps:
+      - id: app
+        if: vars.RELEASE_APP_CLIENT_ID != ''
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          # Commits and tags on this repository. The git plugin commits only
+          # CHANGELOG.md and package.json, so workflows permission is not requested.
+          permission-contents: write
+
       - name: Checkout code
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
-          token: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+          token: ${{ steps.app.outputs.token || secrets.GH_TOKEN || github.token }}
+
+      - name: Git identity
+        if: steps.app.outputs.token != ''
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          SLUG: ${{ steps.app.outputs.app-slug }}
+        run: |
+          id=$(gh api "/users/${SLUG}[bot]" --jq .id)
+          git config user.name "${SLUG}[bot]"
+          git config user.email "${id}+${SLUG}[bot]@users.noreply.github.com"
+          {
+            echo "GIT_AUTHOR_NAME=${SLUG}[bot]"
+            echo "GIT_AUTHOR_EMAIL=${id}+${SLUG}[bot]@users.noreply.github.com"
+            echo "GIT_COMMITTER_NAME=${SLUG}[bot]"
+            echo "GIT_COMMITTER_EMAIL=${id}+${SLUG}[bot]@users.noreply.github.com"
+          } >> "$GITHUB_ENV"
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -58,8 +85,8 @@ jobs:
       - name: Run semantic-release
         id: semantic
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
-          GH_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app.outputs.token || secrets.GH_TOKEN || github.token }}
+          GH_TOKEN: ${{ steps.app.outputs.token || secrets.GH_TOKEN || github.token }}
         run: |
           # Run semantic-release to handle versioning and changelog
           npx semantic-release
@@ -204,7 +231,9 @@ jobs:
 
       - name: Create GitHub Release
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+          # Phase 2 is started by the release commit, not by this release.
+          # Nothing in this repo listens for `release` or tag pushes.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ steps.get_version.outputs.version }}
         run: |
           # Check if release already exists
@@ -221,7 +250,7 @@ jobs:
 
       - name: Upload binaries to release
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ steps.get_version.outputs.version }}
         run: |
           # Published releases may be immutable. A retry must not alter them.
@@ -244,7 +273,7 @@ jobs:
 
       - name: Publish GitHub Release
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ steps.get_version.outputs.version }}
         run: |
           release=$(gh release view "v${VERSION}" --json isDraft,assets)
@@ -269,10 +298,33 @@ jobs:
       contents: read
       packages: write
     steps:
+      - id: app
+        if: vars.RELEASE_APP_CLIENT_ID != ''
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          # The formula commit is the only write, and it is in another repository.
+          owner: stealth-factory
+          repositories: homebrew-tap
+          permission-contents: write
+
       - name: Checkout code
         uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
+
+      - name: Git identity
+        if: steps.app.outputs.token != ''
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          SLUG: ${{ steps.app.outputs.app-slug }}
+        run: |
+          # --global so the later clone of homebrew-tap inherits the identity.
+          # This job does not commit in the gh-manager-cli checkout.
+          id=$(gh api "/users/${SLUG}[bot]" --jq .id)
+          git config --global user.name "${SLUG}[bot]"
+          git config --global user.email "${id}+${SLUG}[bot]@users.noreply.github.com"
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -326,13 +378,15 @@ jobs:
 
       - name: Update Homebrew Tap
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+          # github.token cannot write to homebrew-tap, so it is not a fallback.
+          GITHUB_TOKEN: ${{ steps.app.outputs.token || secrets.GH_TOKEN }}
+          APP_TOKEN: ${{ steps.app.outputs.token }}
           VERSION: ${{ steps.get_version.outputs.version }}
         run: |
           set -o pipefail
-          # The cross-repository tap update requires GH_TOKEN.
+          # The cross-repository tap update requires the App token or GH_TOKEN.
           if [ -z "$GITHUB_TOKEN" ]; then
-            echo "::error::Homebrew tap update requires GH_TOKEN with write access to stealth-factory/homebrew-tap"
+            echo "::error::Homebrew tap update requires the org GitHub App token or GH_TOKEN with write access to stealth-factory/homebrew-tap"
             exit 1
           fi
           
@@ -342,9 +396,12 @@ jobs:
           SHA256=$(bash scripts/brew-sha.sh "$VERSION" | awk '/^sha256:/ {print $2}')
           echo "SHA256: $SHA256"
 
-          # Clone the tap repository with authentication
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          # The App identity step already configured the committer when it ran.
+          # The PAT fallback keeps the previous github-actions[bot] identity.
+          if [ -z "$APP_TOKEN" ]; then
+            git config --global user.name "github-actions[bot]"
+            git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          fi
           git clone https://x-access-token:${GITHUB_TOKEN}@github.com/stealth-factory/homebrew-tap.git tap-repo
           
           # Update the formula

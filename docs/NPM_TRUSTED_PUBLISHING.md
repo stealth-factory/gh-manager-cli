@@ -1,6 +1,6 @@
 # npm Trusted Publishing
 
-The npmjs release job in `.github/workflows/release.yml` publishes the application directly as `gh-manager-cli` using GitHub Actions OIDC. It does not use a stored `NPM_TOKEN`. `GH_TOKEN` remains necessary for release commits and Homebrew tap pushes; the separate GitHub Packages job uses `GITHUB_TOKEN`.
+The npmjs release job in `.github/workflows/release.yml` publishes the application directly as `gh-manager-cli` using GitHub Actions OIDC. It does not use a stored `NPM_TOKEN`. Release commits and Homebrew tap pushes mint the org GitHub App token (`RELEASE_APP_CLIENT_ID` / `RELEASE_APP_PRIVATE_KEY`), with `GH_TOKEN` kept only as a fallback. The separate GitHub Packages job uses `GITHUB_TOKEN`.
 
 ## Configure the npm Package
 
@@ -28,7 +28,7 @@ New trusted publisher connections must complete their first successful publish w
 - A dedicated, token-free npm configuration replaces setup-node's authentication placeholder before dependencies are installed and releases run. The job does not reference `NPM_TOKEN` or `NODE_AUTH_TOKEN` secrets.
 - Public packages published from this public repository through OIDC receive npm's automatic provenance attestations.
 
-`GH_TOKEN` authenticates against GitHub, not npmjs. Unscoped naming does not bypass npm's package-side trusted-publisher configuration.
+The GitHub App token and the `GH_TOKEN` fallback authenticate against GitHub, not npmjs. Unscoped naming does not bypass npm's package-side trusted-publisher configuration.
 
 ## Verify and Recover
 

@@ -40,14 +40,15 @@ The GitHub Packages step temporarily changes the manifest name to `@stealth-fact
 
 Downstream release and publication jobs check out the triggering commit (`github.sha`), matching the binary build. They do not read a newer version from `main` while a release is running. A missing tap token or rejected formula push fails the deployment job; a retry with no formula changes succeeds without another commit. Homebrew retries npm downloads for up to six minutes while the public registry propagates a newly published version.
 
-`GH_TOKEN` must permit the release commit to trigger another workflow run. A push authenticated with the default `GITHUB_TOKEN` does not trigger another push workflow; that fallback alone is insufficient for phase 2.
+The release commit is pushed with the org GitHub App token, so it starts the phase 2 `push` workflow. A push authenticated only with the default `GITHUB_TOKEN` does not trigger another push workflow. The `semantic-release` job skips commits whose message starts with `chore(release):`, so that push does not cut another version.
 
 ## Credentials After the Repository Transfer
 
 - npmjs: configure an OIDC trusted publisher on `gh-manager-cli`. The workflow does not use `NPM_TOKEN`.
-- `GH_TOKEN`: must allow repository/tag/release writes for `stealth-factory/gh-manager-cli` and formula pushes to `stealth-factory/homebrew-tap`.
-- `GITHUB_TOKEN`: the `publish-extras` job requests `packages: write` for publishing under the new GitHub organisation. Check the organisation's package creation policy.
-- Organisation-level GitHub secrets are supported. A repository secret with the same name overrides the organisation secret; retain only the intended `GH_TOKEN` configuration.
+- Org GitHub App: `vars.RELEASE_APP_CLIENT_ID` and `secrets.RELEASE_APP_PRIVATE_KEY`. The `semantic-release` job mints a contents write token for this repository. The tap step mints a separate contents write token for `stealth-factory/homebrew-tap` only. Both keep `secrets.GH_TOKEN` as a fallback so a merge is safe before the App is installed. `github.token` is a further fallback for the release commit only; it cannot push the formula.
+- GitHub release assets: `create-release` uses `GITHUB_TOKEN`. This repository does not run a workflow on `release` or tag pushes.
+- `GITHUB_TOKEN`: the `publish-extras` job requests `packages: write` for GitHub Packages. The App has no Packages permission.
+- Do not delete `GH_TOKEN` until a release has succeeded with the App step actually running. Revoke the `altabella` PAT only after every repository has moved.
 
 See [npm Package Name and Ownership](NPM_SCOPE_MIGRATION.md) for migration history and verification.
 

@@ -45,10 +45,10 @@ The release commit is pushed with the org GitHub App token, so it starts the pha
 ## Credentials After the Repository Transfer
 
 - npmjs: configure an OIDC trusted publisher on `gh-manager-cli`. The workflow does not use `NPM_TOKEN`.
-- Org GitHub App: `vars.RELEASE_APP_CLIENT_ID` and `secrets.RELEASE_APP_PRIVATE_KEY`. The `semantic-release` job mints a contents write token for this repository. The tap step mints a separate contents write token for `stealth-factory/homebrew-tap` only. Both keep `secrets.GH_TOKEN` as a fallback so a merge is safe before the App is installed. `github.token` is a further fallback for the release commit only; it cannot push the formula.
+- Org GitHub App: `vars.RELEASE_APP_CLIENT_ID` and `secrets.RELEASE_APP_PRIVATE_KEY`. The `semantic-release` job mints a contents write token for this repository. The tap step mints a separate contents write token for `stealth-factory/homebrew-tap` only. `altabella` has been removed from this repository, so neither job falls back to `secrets.GH_TOKEN` or `github.token`.
 - GitHub release assets: `create-release` uses `GITHUB_TOKEN`. This repository does not run a workflow on `release` or tag pushes.
 - `GITHUB_TOKEN`: the `publish-extras` job requests `packages: write` for GitHub Packages. The App has no Packages permission.
-- Do not delete `GH_TOKEN` until a release has succeeded with the App step actually running. Revoke the `altabella` PAT only after every repository has moved.
+- Delete this repository's `GH_TOKEN` Actions secret if it is still present. Revoke the `altabella` PAT only after every other repository has moved.
 
 See [npm Package Name and Ownership](NPM_SCOPE_MIGRATION.md) for migration history and verification.
 

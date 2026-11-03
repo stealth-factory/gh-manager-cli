@@ -36,7 +36,9 @@ jobs:
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
-          token: ${{ steps.app.outputs.token || secrets.GH_TOKEN || github.token }}
+          # altabella was removed from this repository. Do not fall through to
+          # the built-in token: that push does not start phase 2.
+          token: ${{ steps.app.outputs.token }}
 
       - name: Git identity
         if: steps.app.outputs.token != ''
@@ -85,8 +87,8 @@ jobs:
       - name: Run semantic-release
         id: semantic
         env:
-          GITHUB_TOKEN: ${{ steps.app.outputs.token || secrets.GH_TOKEN || github.token }}
-          GH_TOKEN: ${{ steps.app.outputs.token || secrets.GH_TOKEN || github.token }}
+          GITHUB_TOKEN: ${{ steps.app.outputs.token }}
+          GH_TOKEN: ${{ steps.app.outputs.token }}
         run: |
           # Run semantic-release to handle versioning and changelog
           npx semantic-release
@@ -378,15 +380,13 @@ jobs:
 
       - name: Update Homebrew Tap
         env:
-          # github.token cannot write to homebrew-tap, so it is not a fallback.
-          GITHUB_TOKEN: ${{ steps.app.outputs.token || secrets.GH_TOKEN }}
-          APP_TOKEN: ${{ steps.app.outputs.token }}
+          GITHUB_TOKEN: ${{ steps.app.outputs.token }}
           VERSION: ${{ steps.get_version.outputs.version }}
         run: |
           set -o pipefail
-          # The cross-repository tap update requires the App token or GH_TOKEN.
+          # altabella was removed from this repository. The tap push needs the App token.
           if [ -z "$GITHUB_TOKEN" ]; then
-            echo "::error::Homebrew tap update requires the org GitHub App token or GH_TOKEN with write access to stealth-factory/homebrew-tap"
+            echo "::error::Homebrew tap update requires the org GitHub App token with write access to stealth-factory/homebrew-tap"
             exit 1
           fi
           
@@ -396,12 +396,7 @@ jobs:
           SHA256=$(bash scripts/brew-sha.sh "$VERSION" | awk '/^sha256:/ {print $2}')
           echo "SHA256: $SHA256"
 
-          # The App identity step already configured the committer when it ran.
-          # The PAT fallback keeps the previous github-actions[bot] identity.
-          if [ -z "$APP_TOKEN" ]; then
-            git config --global user.name "github-actions[bot]"
-            git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          fi
+          # The Git identity step configured the App bot before this step.
           git clone https://x-access-token:${GITHUB_TOKEN}@github.com/stealth-factory/homebrew-tap.git tap-repo
           
           # Update the formula

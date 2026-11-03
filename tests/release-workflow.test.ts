@@ -172,7 +172,8 @@ describe('deployment workflow (GMC-54)', () => {
     const f = fixture({ GITHUB_TOKEN: '' });
     const result = f.run('Update Homebrew Tap');
     expect(result.status).toBe(1);
-    expect(result.stdout).toContain('::error::Homebrew tap update requires the org GitHub App token or GH_TOKEN');
+    expect(result.stdout).toContain('::error::Homebrew tap update requires the org GitHub App token');
+    expect(existsSync(join(f.directory, 'git-calls.jsonl'))).toBe(false);
   });
 
   it('stops before cloning the tap when the npm archive remains unavailable', () => {
@@ -197,9 +198,11 @@ describe('npm OIDC release workflow (GMC-55)', () => {
     expect(npmjsJob).toContain('          package-manager-cache: false');
     expect(npmjsJob).not.toContain('secrets.NPM_TOKEN');
     expect(npmjsJob).not.toMatch(/^\s+(NPM_TOKEN|NODE_AUTH_TOKEN):/m);
-    // Release commits use the org App token, with the bot PAT kept as a fallback.
+    // Release commits use the org App token. altabella no longer has access here.
     expect(npmjsJob).toContain('uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0');
-    expect(npmjsJob).toContain('GH_TOKEN: ${{ steps.app.outputs.token || secrets.GH_TOKEN || github.token }}');
+    expect(npmjsJob).toContain('GH_TOKEN: ${{ steps.app.outputs.token }}');
+    expect(npmjsJob).not.toContain('secrets.GH_TOKEN');
+    expect(npmjsJob).not.toContain('github.token');
     expect(workflow).toContain('NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}');
   });
 
@@ -229,14 +232,9 @@ describe('npm OIDC release workflow (GMC-55)', () => {
 });
 
 describe('org GitHub App token', () => {
-  it('keeps secrets.GH_TOKEN only as the case-A fallback', () => {
-    const lines = workflow.split('\n').filter(line => line.includes('secrets.GH_TOKEN') || line.includes('secrets.RELEASE_TOKEN'));
-    expect(lines).toEqual([
-      '          token: ${{ steps.app.outputs.token || secrets.GH_TOKEN || github.token }}',
-      '          GITHUB_TOKEN: ${{ steps.app.outputs.token || secrets.GH_TOKEN || github.token }}',
-      '          GH_TOKEN: ${{ steps.app.outputs.token || secrets.GH_TOKEN || github.token }}',
-      '          GITHUB_TOKEN: ${{ steps.app.outputs.token || secrets.GH_TOKEN }}',
-    ]);
+  it('does not fall back to the removed altabella PAT or github.token', () => {
+    const lines = workflow.split('\n').filter(line => line.includes('secrets.GH_TOKEN') || line.includes('secrets.RELEASE_TOKEN') || line.includes('github.token'));
+    expect(lines).toEqual([]);
   });
 
   it('mints a contents token for this repo and a separate contents token for the tap', () => {
@@ -261,8 +259,8 @@ describe('org GitHub App token', () => {
     const tapJob = workflow.split('\n  publish-extras:')[1];
     expect(tapJob).toContain('owner: stealth-factory');
     expect(tapJob).toContain('repositories: homebrew-tap');
-    expect(tapJob).toContain('GITHUB_TOKEN: ${{ steps.app.outputs.token || secrets.GH_TOKEN }}');
-    expect(tapJob).not.toContain('steps.app.outputs.token || secrets.GH_TOKEN || github.token');
+    expect(tapJob).toContain('GITHUB_TOKEN: ${{ steps.app.outputs.token }}');
+    expect(tapJob).not.toContain('github-actions[bot]');
     expect(tapJob).toContain('git commit -m "chore: update gh-manager-cli to ${VERSION}"');
     expect(semanticJob).toContain("if: steps.app.outputs.token != ''");
     expect(tapJob).toContain("if: steps.app.outputs.token != ''");
@@ -304,18 +302,8 @@ describe('org GitHub App token', () => {
     expect(existsSync(join(f.directory, 'github-env'))).toBe(false);
   });
 
-  it('keeps github-actions[bot] on the tap when the App token is absent', () => {
-    const f = fixture({ APP_TOKEN: '' });
-    expect(f.run('Update Homebrew Tap', 'publish-extras').status).toBe(0);
-    const calls = readFileSync(join(f.directory, 'git-calls.jsonl'), 'utf8');
-    expect(calls).toContain('["config","--global","user.name","github-actions[bot]"]');
-    expect(calls).toContain('["config","--global","user.email","github-actions[bot]@users.noreply.github.com"]');
-    expect(calls).toContain('x-access-token:offline-tap-token@github.com/stealth-factory/homebrew-tap.git');
-    expect(existsSync(join(f.directory, 'gh-calls.jsonl'))).toBe(false);
-  });
-
-  it('does not overwrite the App committer when the tap token is present', () => {
-    const f = fixture({ APP_TOKEN: 'app-token', GITHUB_TOKEN: 'app-token' });
+  it('pushes the tap with the App token and does not fall back to github-actions[bot]', () => {
+    const f = fixture({ GITHUB_TOKEN: 'app-token' });
     expect(f.run('Update Homebrew Tap', 'publish-extras').status).toBe(0);
     const calls = readFileSync(join(f.directory, 'git-calls.jsonl'), 'utf8');
     expect(calls).not.toContain('github-actions[bot]');

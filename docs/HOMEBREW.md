@@ -19,9 +19,9 @@ After npm publication and the binary release, `.github/workflows/release.yml` up
 - Download the published `gh-manager-cli` tarball and calculate its SHA256. Downloads retry for up to six minutes to allow npm propagation.
 - Replace either the previous unscoped URL or an existing scoped URL with the unscoped tarball URL.
 - Update the checksum and the GitHub homepage.
-- Commit and push with the org GitHub App token, scoped to `stealth-factory/homebrew-tap` with contents write. `GH_TOKEN` remains the fallback until that secret is removed. The built-in `GITHUB_TOKEN` cannot write to the tap.
+- Commit and push with the org GitHub App token, scoped to `stealth-factory/homebrew-tap` with contents write. The built-in `GITHUB_TOKEN` cannot write to the tap, and this repository no longer has an `altabella` fallback.
 
-A missing App token and `GH_TOKEN`, or a rejected push, fails the job. If the formula already matches the release, the job succeeds without another commit or push. The tap's only workflow listens for `Formula/opscope.rb`, so a `gh-manager-cli` formula push does not start it.
+A missing App token, or a rejected push, fails the job. If the formula already matches the release, the job succeeds without another commit or push. The tap's only workflow listens for `Formula/opscope.rb`, so a `gh-manager-cli` formula push does not start it.
 
 If the registry remains unavailable, the job stops before cloning or updating the tap. Do not hash a locally packed tarball: the checksum must match the exact archive served by npm. The download script fails on HTTP errors, so a missing release cannot become a bogus checksum.
 

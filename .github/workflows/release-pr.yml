@@ -8,6 +8,7 @@
 # This is release-please's shape, as opscope runs it. git-cliff reads this
 # package's history directly; the workflow bumps package.json itself rather
 # than asking semantic-release to publish on the merge.
+# A releasable commit on main is enough to open or update that pull request.
 name: release-pr
 
 on:

@@ -100,14 +100,30 @@ jobs:
 
           # git-cliff bumps the patch for any commit at all, which would
           # offer a release for a changelog-only edit. Only feat, fix, perf,
-          # and revert start a release, plus any breaking marker. Everything
-          # else still reaches the changelog: it rides along with the next
-          # real change rather than being dropped.
+          # and revert start a release, plus any breaking marker. A breaking
+          # footer is not part of the subject, so the whole message is read.
+          # Everything else still reaches the changelog: it rides along with
+          # the next real change rather than being dropped.
           last=$(git describe --tags --abbrev=0 2>/dev/null || true)
           range="${last:+${last}..}HEAD"
-          releasable=$(git log "$range" --format=%s \
-            | grep -cE '^(feat|fix|perf|revert)(\(.+\))?!?:|^[a-z]+(\(.+\))?!:' \
-            || true)
+          releasable=$(git log "$range" --format='@@@%n%s%n%b' | awk '
+            /^@@@$/ {
+              if (seen && releasable_commit) count++
+              seen = 1
+              releasable_commit = 0
+              subject_line = 1
+              next
+            }
+            !seen { next }
+            subject_line {
+              subject_line = 0
+              if ($0 ~ /^(feat|fix|perf|revert)(\(.+\))?!?:/ || $0 ~ /^[a-z]+(\(.+\))?!:/)
+                releasable_commit = 1
+              next
+            }
+            $0 ~ /^BREAKING[- ]CHANGE:/ { releasable_commit = 1 }
+            END { if (seen && releasable_commit) count++; print count + 0 }
+          ')
 
           if [ "$releasable" -eq 0 ]; then
             echo "nothing to release: still $current"

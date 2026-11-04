@@ -17,7 +17,7 @@ The executable remains `gh-manager-cli`. Configuration, preferences, cache, and 
 
 `.github/workflows/release-pr.yml` runs on every push to `main`. git-cliff reads conventional commits since the last tag (`cliff.toml`).
 
-`feat:` is a minor bump. `fix:` and `perf:` are patch bumps. A breaking-change marker (`type!:` or `feat!:`) is a major bump. `revert:` is included. Documentation and maintenance commits do not open a release by themselves; they are listed in the changelog of the next real release. git-cliff would otherwise bump the patch for any commit, so the workflow ignores a range that has none of those releasable subjects.
+`feat:` is a minor bump. `fix:` and `perf:` are patch bumps. A breaking change is a major bump, whether it is marked with `!` in the subject or with a `BREAKING CHANGE:` / `BREAKING-CHANGE:` footer. `revert:` is included. Documentation and maintenance commits do not open a release by themselves; they are listed in the changelog of the next real release. git-cliff would otherwise bump the patch for any commit, so the workflow ignores a range that has none of those releasable commits.
 
 When there is something to release, the workflow prepends a changelog section, bumps `package.json`, and opens or updates one pull request from the `release` branch. That branch is force-pushed. Do not commit to it. Edit the changelog on `main` if a line reads badly. Merging the pull request is the release. Until then nothing is tagged or published.
 
@@ -31,7 +31,7 @@ Do not manually bump the version or edit `CHANGELOG.md`. The historical sections
 
 `.github/workflows/release.yml` runs on `v*` tags, and on a manual dispatch. Dispatching a branch builds binaries and does not publish. Dispatching the tag retries publication. The npm, GitHub release, and Homebrew jobs run only when the ref is a tag, and only after the Linux, macOS, and Windows binaries have built.
 
-The workflow checks the tag against `package.json` and refuses to publish npm if they disagree. It does not edit the manifest.
+The workflow checks the tag against `package.json` before npm publish and before the GitHub release is created or changed. A mismatched tag fails both, so a draft for the manifest version is left alone. It does not edit the manifest.
 
 1. Build Linux, macOS, and Windows binaries with the pinned `@yao-pkg/pkg` and `node22` targets.
 2. Publish `gh-manager-cli` to npmjs with OIDC trusted publishing (`id-token: write`), a token-free npm configuration, and npm 11.19.0. A version already on npm is skipped. No `NPM_TOKEN` or `NODE_AUTH_TOKEN` is set on this job. Configure the trusted publisher for `stealth-factory/gh-manager-cli`, workflow filename `release.yml`; see [npm Trusted Publishing](NPM_TRUSTED_PUBLISHING.md).

@@ -363,7 +363,7 @@ Every change should trace back to a Linear issue. To guarantee GitHub ↔ Linear
 
 ### Automated Release Process
 1. **PR Creation:** Titles automatically formatted to conventional commits
-2. **Main Branch Push:** Updates the standing release pull request when the commits since the last tag include a releasable change (`feat`, `fix`, `perf`, `revert`, or a breaking marker)
+2. **Main Branch Push:** Updates the standing release pull request when the commits since the last tag include a releasable change (`feat`, `fix`, `perf`, `revert`, a `!` subject, or a `BREAKING CHANGE:` / `BREAKING-CHANGE:` footer)
 3. **Version Calculation:** git-cliff from those commits (`feat` = minor, `fix` and `perf` = patch, breaking = major)
 4. **CHANGELOG.md:** Prepended on the release pull request
 5. **Release decision:** Merging the release pull request tags `vX.Y.Z`

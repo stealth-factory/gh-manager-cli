@@ -300,6 +300,7 @@ describe('org GitHub App token', () => {
     expect(releasePr).not.toMatch(/\bnpm publish\b/);
     expect(releasePr).toContain("if: steps.app.outputs.token != ''");
     expect(releasePr).toContain('^(feat|fix|perf|revert)');
+    expect(releasePr).toContain('BREAKING[- ]CHANGE:');
 
     expect(tagRelease).toContain('branches: [main]');
     expect(tagRelease).toContain('permission-contents: write');
@@ -370,5 +371,69 @@ describe('org GitHub App token', () => {
     expect(calls).not.toContain('github-actions[bot]');
     expect(calls).toContain('x-access-token:app-token@github.com/stealth-factory/homebrew-tap.git');
     expect(existsSync(join(f.directory, 'gh-calls.jsonl'))).toBe(false);
+  });
+});
+
+describe('release eligibility', () => {
+  const script = runBlock('What the next version would be', 'prepare', releasePr);
+
+  function decide(messages: string[][]): string {
+    const directory = mkdtempSync(join(tmpdir(), 'gh-release-eligibility-'));
+    const git = (...args: string[]): void => {
+      const result = spawnSync('git', args, { cwd: directory, encoding: 'utf8' });
+      if (result.status !== 0) {
+        throw new Error(result.stderr || `git ${args.join(' ')} failed`);
+      }
+    };
+    git('init', '-q');
+    git('config', 'user.email', 'test@example.com');
+    git('config', 'user.name', 'Test');
+    writeFileSync(join(directory, 'package.json'), '{"version":"1.53.3"}\n');
+    writeFileSync(join(directory, 'cliff.toml'), readFileSync(join(root, 'cliff.toml')));
+    writeFileSync(join(directory, 'tracked.txt'), 'base\n');
+    git('add', '.');
+    git('commit', '-qm', 'chore: base');
+    git('tag', 'v1.53.3');
+    for (const message of messages) {
+      writeFileSync(join(directory, 'tracked.txt'), `${message[0]}\n`, { flag: 'a' });
+      git('add', '.');
+      git('commit', '-q', ...message.flatMap((part) => ['-m', part]));
+    }
+    const output = join(directory, 'github-output');
+    const result = spawnSync('bash', ['-c', script], {
+      cwd: directory,
+      encoding: 'utf8',
+      env: { ...process.env, GITHUB_OUTPUT: output },
+    });
+    const text = [
+      result.stdout,
+      result.stderr,
+      existsSync(output) ? readFileSync(output, 'utf8') : '',
+    ].join('\n');
+    rmSync(directory, { recursive: true, force: true });
+    expect(result.status, text).toBe(0);
+    return text;
+  }
+
+  it('does not release a documentation commit', () => {
+    expect(decide([['docs: clarify the footer']])).toContain('release=no');
+  });
+
+  it('releases a breaking-change footer that has no bang in the subject', () => {
+    const text = decide([['refactor: rename a helper', 'BREAKING CHANGE: callers must pass the new argument']]);
+    expect(text).toContain('release=yes');
+    expect(text).toContain('next=2.0.0');
+  });
+
+  it('releases the hyphenated breaking-change footer', () => {
+    const text = decide([['build: switch the packager', 'BREAKING-CHANGE: the archive layout changed']]);
+    expect(text).toContain('release=yes');
+    expect(text).toContain('next=2.0.0');
+  });
+
+  it('still releases an ordinary fix', () => {
+    const text = decide([['fix(cli): correct the range']]);
+    expect(text).toContain('release=yes');
+    expect(text).toContain('next=1.53.4');
   });
 });

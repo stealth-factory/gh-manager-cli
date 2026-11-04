@@ -1,6 +1,6 @@
 # Release Process
 
-Releases come from [stealth-factory/gh-manager-cli](https://github.com/stealth-factory/gh-manager-cli), using `.github/workflows/release.yml` and the semantic-release configuration in `package.json`.
+Releases come from [stealth-factory/gh-manager-cli](https://github.com/stealth-factory/gh-manager-cli). Publication is pooled, in the same shape as opscope: merges to `main` accumulate, a standing release pull request is the decision to cut a version, and `.github/workflows/release.yml` publishes only from the tag that pull request creates.
 
 ## Published Packages and Commands
 
@@ -13,50 +13,50 @@ Releases come from [stealth-factory/gh-manager-cli](https://github.com/stealth-f
 
 The executable remains `gh-manager-cli`. Configuration, preferences, cache, and log paths retain the application name, regardless of npm scope.
 
-## Phase 1: Version and npm Publication
+## What a merge to main does
 
-On a non-release commit pushed to `main`, semantic-release:
+`.github/workflows/release-pr.yml` runs on every push to `main`. git-cliff reads conventional commits since the last tag (`cliff.toml`).
 
-1. Analyses conventional commits since the last release.
-2. Calculates the release version.
-3. Updates `package.json` and the generated `CHANGELOG.md`.
-4. Commits the release metadata as `chore(release): X.Y.Z` and creates a tag.
-5. Publishes the full application as `gh-manager-cli` publicly on npm.
+`feat:` is a minor bump. `fix:` and `perf:` are patch bumps. A breaking change is a major bump, whether it is marked with `!` in the subject or with a `BREAKING CHANGE:` / `BREAKING-CHANGE:` footer. `revert:` is included. Documentation and maintenance commits do not open a release by themselves; they are listed in the changelog of the next real release. git-cliff would otherwise bump the patch for any commit, so the workflow ignores a range that has none of those releasable commits.
 
-The npmjs publication uses OIDC trusted publishing with `id-token: write`, a token-free npm configuration, and npm 11.19.0. No stored npm publishing secret is used. Configure the npm package's trusted publisher for `stealth-factory/gh-manager-cli`, workflow `release.yml`; see [npm Trusted Publishing](NPM_TRUSTED_PUBLISHING.md).
+When there is something to release, the workflow prepends a changelog section, bumps `package.json`, and opens or updates one pull request from the `release` branch. That branch is force-pushed. Do not commit to it. The changelog text comes from the conventional commits on `main`. To change a line, change that commit message; do not edit `CHANGELOG.md` by hand. A manual run is accepted only from `main`; a dispatch from another branch does not rewrite `release`. Merging the pull request is the release. Until then nothing is tagged or published.
 
-Do not manually bump the version or edit `CHANGELOG.md`. `feat:` triggers a minor release; `fix:` and `perf:` trigger patch releases; a breaking-change marker triggers a major release. Documentation and maintenance commits alone do not normally trigger publication.
+Do not manually bump the version or edit `CHANGELOG.md`. The historical sections were written by semantic-release; new sections are prepended by git-cliff and are not a rewrite of that history.
 
-## Phase 2: Binaries, GitHub Packages, and Homebrew
+## What merging the release pull request does
 
-The release metadata commit triggers the second phase:
+`.github/workflows/tag-release.yml` runs on the push to `main`. It pushes an annotated `vX.Y.Z` tag only when that commit is the merge of the `release` pull request and `package.json` names a version that has no tag yet. The tag push starts publication. Any other push, including one that changes `package.json`, is left untagged. A version that is already tagged is left alone.
 
-1. Build Linux, macOS, and Windows binaries using the pinned `@yao-pkg/pkg` and `node22` targets.
-2. Create a draft GitHub release from the generated changelog, upload all three binaries, verify the assets, then publish the complete release.
-3. Build the application and publish the scoped package to GitHub Packages.
-4. Download the unscoped tarball from the public npm registry, hash it, and update `Formula/gh-manager-cli.rb` in `stealth-factory/homebrew-tap`.
+## What the tag publishes
 
-The GitHub Packages step temporarily changes the manifest name to `@stealth-factory/gh-manager-cli` and its registry to GitHub Packages, then restores the unscoped npmjs manifest even on failure. It uses a separate authentication configuration. Homebrew uses the published npmjs archive, rather than a local `npm pack` checksum.
+`.github/workflows/release.yml` runs on `v*` tags, and on a manual dispatch. Dispatching a branch builds binaries and does not publish. Dispatching the tag retries publication. The npm, GitHub release, and Homebrew jobs run only when the ref is a tag, and only after the Linux, macOS, and Windows binaries have built.
 
-Downstream release and publication jobs check out the triggering commit (`github.sha`), matching the binary build. They do not read a newer version from `main` while a release is running. A missing tap token or rejected formula push fails the deployment job; a retry with no formula changes succeeds without another commit. Homebrew retries npm downloads for up to six minutes while the public registry propagates a newly published version.
+The workflow checks the tag against `package.json` before npm publish and before the GitHub release is created or changed. A mismatched tag fails both, so a draft for the manifest version is left alone. It does not edit the manifest.
 
-The release commit is pushed with the org GitHub App token, so it starts the phase 2 `push` workflow. A push authenticated only with the default `GITHUB_TOKEN` does not trigger another push workflow. The `semantic-release` job skips commits whose message starts with `chore(release):`, so that push does not cut another version.
+1. Build Linux, macOS, and Windows binaries with the pinned `@yao-pkg/pkg` and `node22` targets.
+2. Publish `gh-manager-cli` to npmjs with OIDC trusted publishing (`id-token: write`), a token-free npm configuration, and npm 11.19.0. A version already on npm is skipped. No `NPM_TOKEN` or `NODE_AUTH_TOKEN` is set on this job. Configure the trusted publisher for `stealth-factory/gh-manager-cli`, workflow filename `release.yml`; see [npm Trusted Publishing](NPM_TRUSTED_PUBLISHING.md).
+3. Create a draft GitHub release from the changelog section for that version, upload all three binaries, verify the assets, then publish the release. Upload failures fail the job and leave the draft. An already published release is checked and not modified.
+4. Publish `@stealth-factory/gh-manager-cli` to GitHub Packages with `GITHUB_TOKEN`. The step temporarily changes the manifest name and registry, then restores both, including when publish fails.
+5. Download the unscoped tarball from the public npm registry, hash it, and update `Formula/gh-manager-cli.rb` in `stealth-factory/homebrew-tap`.
 
-## Credentials After the Repository Transfer
+Homebrew uses that published archive, not a local `npm pack` checksum. Downloads retry for up to six minutes while the registry propagates. If the archive is still missing, the job stops before it clones or edits the tap. A missing App token or a rejected formula push fails the job. A retry whose formula already matches succeeds without another commit.
 
-- npmjs: configure an OIDC trusted publisher on `gh-manager-cli`. The workflow does not use `NPM_TOKEN`.
-- Org GitHub App: `vars.RELEASE_APP_CLIENT_ID` and `secrets.RELEASE_APP_PRIVATE_KEY`. The `semantic-release` job mints a contents write token for this repository. The tap step mints a separate contents write token for `stealth-factory/homebrew-tap` only. `altabella` has been removed from this repository, so neither job falls back to `secrets.GH_TOKEN` or `github.token`.
-- GitHub release assets: `create-release` uses `GITHUB_TOKEN`. This repository does not run a workflow on `release` or tag pushes.
-- `GITHUB_TOKEN`: the `publish-extras` job requests `packages: write` for GitHub Packages. The App has no Packages permission.
+The binary build, the GitHub release, the npm publish, and the tap update all check out the triggering commit (`github.sha`).
+
+## Credentials
+
+- npmjs: an OIDC trusted publisher on `gh-manager-cli`. The workflow does not use `NPM_TOKEN`.
+- Org GitHub App: `vars.RELEASE_APP_CLIENT_ID` and `secrets.RELEASE_APP_PRIVATE_KEY`, minted with `actions/create-github-app-token` pinned to `64ab729a6294000f5aa4a4bc0b73d1f32bc45510` (v3.3.0). The release pull request token can write contents and pull requests in this repository. The tag token can write contents, so the tag push starts `release.yml`. The tap token can write contents only in `stealth-factory/homebrew-tap`. `altabella` has been removed from this repository, so these jobs do not fall back to `secrets.GH_TOKEN`.
+- GitHub release assets stay on `GITHUB_TOKEN`. The App has no Packages permission; GitHub Packages uses `GITHUB_TOKEN` as well.
 - Delete this repository's `GH_TOKEN` Actions secret if it is still present. Revoke the `altabella` PAT only after every other repository has moved.
 
 See [npm Package Name and Ownership](NPM_SCOPE_MIGRATION.md) for migration history and verification.
 
 ## Manual Trigger and Recovery
 
-Use GitHub Actions → **Release Pipeline** → **Run workflow**. Semantic-release still requires releasable commits; a manual trigger does not force a version bump.
+Actions → **release-pr** → **Run workflow** refreshes the release pull request without waiting for a merge. It still requires a releasable commit; it does not force a version.
 
-For an interrupted second phase, retry the failed workflow and inspect the job conditions. Upload failures leave a draft for recovery. An already published release is checked for all three non-empty binary assets and is not modified; a published immutable release with missing assets requires a new patch release.
+Actions → **Release Pipeline** → **Run workflow**, with the branch set to the tag, retries a tag that already exists. Upload failures leave a draft. An already published release with all three binaries is left unchanged. A published release that is missing an asset needs a new patch release. npm and the tap skip work that is already done.
 
 Do not run `npm version` to force a release. For tap repair, use [HOMEBREW.md](HOMEBREW.md).
 
@@ -71,4 +71,4 @@ pnpm build
 npm pack --dry-run
 ```
 
-A passing local check proves the artifacts can be prepared; confirm registry versions, GitHub release assets, and the tap formula separately after publication.
+A passing local check proves the artefacts can be prepared; confirm registry versions, GitHub release assets, and the tap formula separately after publication.

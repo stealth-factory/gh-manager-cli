@@ -1,0 +1,63 @@
+# How the changelog is built, and what decides the version.
+#
+# git-cliff reads the conventional commits since the last tag. release-pr.yml
+# owns the version bump; release.yml publishes the tag and does not edit
+# the manifest it is building.
+#
+# Squash merge means the pull request title is the commit subject, so these
+# rules are really rules about pull request titles.
+
+[changelog]
+# Empty on purpose. CHANGELOG.md already holds the semantic-release history,
+# and a header here would be inserted again on every prepend.
+header = ""
+body = """
+{% if version -%}
+## [{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }}
+{% else -%}
+## Unreleased
+{% endif %}
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group | upper_first }}
+{% for commit in commits %}
+- {% if commit.scope %}**{{ commit.scope }}**: {% endif %}{{ commit.message | upper_first }}\
+{% if commit.breaking %} — **breaking**{% endif %}
+{%- endfor %}
+{% endfor %}
+"""
+trim = true
+footer = ""
+
+[git]
+conventional_commits = true
+filter_unconventional = false
+split_commits = false
+protect_breaking_commits = true
+commit_parsers = [
+  { message = "^feat", group = "Features" },
+  { message = "^fix", group = "Bug Fixes" },
+  { message = "^perf", group = "Performance" },
+  { message = "^refactor", group = "Refactor" },
+  { message = "^doc", group = "Documentation" },
+  { message = "^test", group = "Tests" },
+  { message = "^build", group = "Build" },
+  { message = "^ci", group = "CI" },
+  # Release commits this machinery writes. Keeping them would mean every
+  # changelog opening with a note that the last changelog was written.
+  { message = "^chore\\(release\\)", skip = true },
+  { message = "^release:", skip = true },
+  { message = "^chore\\(deps\\)", group = "Dependencies" },
+  { message = "^chore", group = "Miscellaneous" },
+  { message = "^style", group = "Miscellaneous" },
+  { message = "^revert", group = "Reverted" },
+  { body = ".*security", group = "Security" },
+]
+filter_commits = false
+topo_order = false
+sort_commits = "oldest"
+
+[bump]
+# feat -> minor, fix and perf -> patch, breaking -> major. This package is
+# past 1.0, so a breaking change moves the major.
+features_always_bump_minor = true
+breaking_always_bump_major = true

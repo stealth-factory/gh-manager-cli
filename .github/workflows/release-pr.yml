@@ -1,0 +1,239 @@
+# Keeps a standing pull request describing the next release.
+#
+# Every merge to main updates it: the version git-cliff computes from the
+# conventional commits since the last tag, the changelog entry for them,
+# and the package.json bump. Merging that pull request is the release
+# decision. Nothing is tagged, built, or published until you do.
+#
+# This is release-please's shape, as opscope runs it. git-cliff reads this
+# package's history directly; the workflow bumps package.json itself rather
+# than asking semantic-release to publish on the merge.
+name: release-pr
+
+on:
+  push:
+    branches: [main]
+  # A manual refresh of the standing release pull request. The job
+  # below refuses every ref except main, so a dispatch from a feature
+  # branch cannot force-push that branch onto release.
+  workflow_dispatch:
+
+permissions:
+  contents: read # Writes use the release App token, not GITHUB_TOKEN.
+
+# One at a time. Two pushes in quick succession would otherwise race to
+# force-push the same branch, and the loser would leave the pull request
+# describing a version that skipped a commit.
+concurrency:
+  group: release-pr
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require the release app
+        if: vars.RELEASE_APP_CLIENT_ID == ''
+        run: |
+          echo "::error::The release pull request requires vars.RELEASE_APP_CLIENT_ID and secrets.RELEASE_APP_PRIVATE_KEY"
+          exit 1
+
+      # Contents write pushes the release branch. Pull requests write opens
+      # or updates the pull request. No owner or repositories list: the
+      # default scope is this repository.
+      - id: app
+        if: vars.RELEASE_APP_CLIENT_ID != ''
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          # The whole history and every tag: the version is computed from
+          # the commits since the last one.
+          fetch-depth: 0
+          # An installation token makes the release pull request an ordinary
+          # pull request. The push ref is refs/heads/release, which no
+          # workflow here treats as a publication.
+          token: ${{ steps.app.outputs.token }}
+
+      - name: Git identity
+        if: steps.app.outputs.token != ''
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          SLUG: ${{ steps.app.outputs.app-slug }}
+        run: |
+          id=$(gh api "/users/${SLUG}[bot]" --jq .id)
+          git config user.name "${SLUG}[bot]"
+          git config user.email "${id}+${SLUG}[bot]@users.noreply.github.com"
+          {
+            echo "GIT_AUTHOR_NAME=${SLUG}[bot]"
+            echo "GIT_AUTHOR_EMAIL=${id}+${SLUG}[bot]@users.noreply.github.com"
+            echo "GIT_COMMITTER_NAME=${SLUG}[bot]"
+            echo "GIT_COMMITTER_EMAIL=${id}+${SLUG}[bot]@users.noreply.github.com"
+          } >> "$GITHUB_ENV"
+
+      - name: Install git-cliff
+        run: |
+          set -euo pipefail
+          # The published binary, fetched and checksummed here rather than
+          # through an installer action.
+          ver=2.13.1
+          sha=9a1263f24e59a2f508c7b3d3283c9dea94a8bf697f96dbc18cc783cac6284546
+          url="https://github.com/orhun/git-cliff/releases/download/v${ver}"
+          url="${url}/git-cliff-${ver}-x86_64-unknown-linux-gnu.tar.gz"
+          curl -fsSL "$url" -o /tmp/cliff.tar.gz
+          echo "${sha}  /tmp/cliff.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/cliff.tar.gz -C /tmp
+          sudo install "/tmp/git-cliff-${ver}/git-cliff" /usr/local/bin/
+          git-cliff --version
+
+      - name: What the next version would be
+        id: next
+        run: |
+          set -euo pipefail
+          current=$(node -p "require('./package.json').version")
+
+          # git-cliff bumps the patch for any commit at all, which would
+          # offer a release for a changelog-only edit. Only feat, fix, perf,
+          # and revert start a release, plus any breaking marker. A breaking
+          # footer is not part of the subject, so the whole message is read.
+          # Everything else still reaches the changelog: it rides along with
+          # the next real change rather than being dropped.
+          last=$(git describe --tags --abbrev=0 2>/dev/null || true)
+          range="${last:+${last}..}HEAD"
+          releasable=$(git log "$range" --format='@@@%n%s%n%b' | awk '
+            /^@@@$/ {
+              if (seen && releasable_commit) count++
+              seen = 1
+              releasable_commit = 0
+              subject_line = 1
+              next
+            }
+            !seen { next }
+            subject_line {
+              subject_line = 0
+              if ($0 ~ /^(feat|fix|perf|revert)(\(.+\))?!?:/ || $0 ~ /^[a-z]+(\(.+\))?!:/)
+                releasable_commit = 1
+              next
+            }
+            $0 ~ /^BREAKING[- ]CHANGE:/ { releasable_commit = 1 }
+            END { if (seen && releasable_commit) count++; print count + 0 }
+          ')
+
+          if [ "$releasable" -eq 0 ]; then
+            echo "nothing to release: still $current"
+            echo "  ${releasable} releasable commits in ${range}"
+            echo "release=no" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          next=$(git cliff --bumped-version | tr -d '[:space:]' | sed 's/^v//')
+          if [ -z "$next" ] || [ "$next" = "$current" ]; then
+            echo "nothing to release: cliff says ${next:-<empty>}, manifest is $current"
+            echo "release=no" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "${releasable} releasable commits in ${range}"
+          echo "$current -> $next"
+          echo "release=yes" >> "$GITHUB_OUTPUT"
+          echo "current=$current" >> "$GITHUB_OUTPUT"
+          echo "next=$next" >> "$GITHUB_OUTPUT"
+
+      - name: Write the changelog and bump the manifest
+        if: steps.next.outputs.release == 'yes'
+        env:
+          NEXT: ${{ steps.next.outputs.next }}
+          CURRENT: ${{ steps.next.outputs.current }}
+        run: |
+          set -euo pipefail
+          # --unreleased --prepend, not a regenerate. CHANGELOG.md keeps its
+          # existing history. This workflow rebuilds its branch from main on
+          # every push, so it starts from the same file and produces the same
+          # result.
+          git cliff --unreleased --tag "v${NEXT}" --prepend CHANGELOG.md
+          perl -0pi -e 's/\n(## \[)/\n\n$1/g; s/\n{3,}/\n\n/g; s/\A\n+//' CHANGELOG.md
+          # Replace only the manifest version. A full JSON rewrite would
+          # churn unrelated formatting on every release pull request.
+          node -e 'const fs=require("fs"); const current=process.env.CURRENT; const next=process.env.NEXT; const raw=fs.readFileSync("package.json","utf8"); const needle="\"version\": \""+current+"\""; if(!raw.includes(needle)){ console.error("package.json version did not match "+current); process.exit(1); } fs.writeFileSync("package.json", raw.replace(needle, "\"version\": \""+next+"\""));'
+          test "$(node -p "require('./package.json').version")" = "$NEXT"
+          grep -q "\\[${NEXT}\\]" CHANGELOG.md
+
+      - name: Open or update the release pull request
+        if: steps.next.outputs.release == 'yes'
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          NEXT: ${{ steps.next.outputs.next }}
+        run: |
+          set -euo pipefail
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::The release pull request requires the org GitHub App token"
+            exit 1
+          fi
+          branch="release"
+          git checkout -B "$branch"
+          git add CHANGELOG.md package.json
+          if git diff --cached --quiet; then
+            echo "nothing changed since the last run"
+            exit 0
+          fi
+          printf '%s\n' \
+            "release: v${NEXT}" \
+            "" \
+            "The manifest moves ahead of the tag so the tag can point at a" \
+            "commit whose version already matches it. release.yml checks" \
+            "they agree and refuses to publish otherwise." \
+            "" \
+            "Prepared by the release-pr workflow. Merging this is the release." \
+            | git commit -q -F -
+          # Force, because this branch is the bot's alone and is rewritten
+          # from main every time.
+          git push -f origin "$branch"
+
+          body=$(printf '%s\n' \
+            "Merging this cuts **v${NEXT}**." \
+            "" \
+            "It tags that commit and starts \`release.yml\` there. npm publishes" \
+            "the unscoped \`gh-manager-cli\` package with trusted publishing." \
+            "Linux, macOS, and Windows binaries are attached to a draft GitHub" \
+            "release, which is published only after all three are present." \
+            "GitHub Packages receives \`@stealth-factory/gh-manager-cli\`, and" \
+            "the Homebrew tap is updated from the public npm tarball." \
+            "" \
+            "This pull request rewrites itself on every merge to main. Do not" \
+            "commit to it. The branch is force-pushed. The changelog text" \
+            "comes from the conventional commits on main." \
+            "" \
+            "---")
+          # Stop inside awk. head would close the pipe early, and pipefail
+          # would then fail this step after the release branch was pushed.
+          notes=$(awk '
+            /^## \[/{ n++; if (n > 1) exit }
+            n == 1 { print; c++; if (c >= 60) exit }
+          ' CHANGELOG.md)
+          full=$(printf '%s\n\n%s\n' "$body" "$notes")
+          # An explicit search for an OPEN pull request, by number. `gh pr view`
+          # falls back to the most recently merged pull request when none is
+          # open, which would rewrite the closed one and never open the next.
+          open=$(gh pr list --head "$branch" --base main --state open \
+            --json number --jq '.[0].number // empty' 2>/dev/null || true)
+          repo="${GITHUB_REPOSITORY}"
+          title="release: v${NEXT}"
+          if [ -n "$open" ]; then
+            echo "updating #${open}"
+            jq -n --arg title "$title" --arg body "$full" \
+              '{title:$title, body:$body}' \
+              | gh api -X PATCH "repos/${repo}/pulls/${open}" --input - \
+              --jq .html_url
+          else
+            echo "opening a new release pull request"
+            jq -n --arg title "$title" --arg body "$full" --arg head "$branch" \
+              '{title:$title, body:$body, head:$head, base:"main"}' \
+              | gh api -X POST "repos/${repo}/pulls" --input - \
+              --jq .html_url
+          fi

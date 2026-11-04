@@ -249,13 +249,11 @@ gh-manager-cli
 
 ### Release Process
 
-Releases are automated via semantic-release:
-1. Merge to main branch
-2. GitHub Actions runs semantic-release
-3. Version calculated from conventional commits
-4. CHANGELOG.md generated automatically
-5. `gh-manager-cli` published publicly on npm using OIDC
-6. GitHub release created with notes and binaries; GitHub Packages and `stealth-factory/homebrew-tap` updated
+Releases are pooled:
+1. Merge to main. That updates a release pull request when the commits warrant a version; it does not publish.
+2. Merging the release pull request tags the version.
+3. The tag publishes `gh-manager-cli` on npm using OIDC, attaches the three binaries to a GitHub release, and updates GitHub Packages and `stealth-factory/homebrew-tap`.
+4. CHANGELOG.md is prepended on the release pull request. Do not edit it by hand.
 
 See [Release Process](docs/RELEASE_PROCESS.md) and [npm Package Name and Ownership](docs/NPM_SCOPE_MIGRATION.md).
 

@@ -1,60 +1,52 @@
+# A tag produces a release. Merges to main do not: release-pr.yml batches
+# those into one pull request, and tag-release.yml tags the merge.
+#
+# Nothing here rewrites the source it is building. The version in
+# package.json and the tag are checked against each other and publication
+# stops if they disagree. release-pr.yml does the bump, in a real commit,
+# before the tag exists.
 name: Release Pipeline
 
 on:
   push:
-    branches: [main]
-  workflow_dispatch: # Manual trigger if needed
+    tags: ['v*']
+  # Dispatching at a branch exercises the binary build and stops before
+  # publication. Dispatching at a tag publishes, which is how a failed
+  # release is retried.
+  workflow_dispatch:
+  # The first time the binary build runs should not be the release.
+  pull_request:
+    paths:
+      - '.github/workflows/release.yml'
+      - '.github/workflows/release-pr.yml'
+      - '.github/workflows/tag-release.yml'
+      - 'cliff.toml'
+      - 'scripts/brew-sha.sh'
+      - 'scripts/update-homebrew-formula.js'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # Run semantic-release to create version, changelog, and tag
-  semantic-release:
-    # Skip release commits. An App-token push of `chore(release):` must start
-    # phase 2 and must not run semantic-release again.
-    if: ${{ !startsWith(github.event.head_commit.message, 'chore(release):') }}
+  # npmjs trusted publishing. This job is the one the package's trusted
+  # publisher names (workflow filename release.yml). It does not run on a
+  # merge to main.
+  npm:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
-    outputs:
-      new_release_published: ${{ steps.semantic.outputs.new_release_published }}
-      new_release_version: ${{ steps.semantic.outputs.new_release_version }}
     permissions:
-      contents: write
-      pull-requests: write
-      issues: write
-      packages: write
+      contents: read
       id-token: write # npm trusted publishing for gh-manager-cli
     steps:
-      - id: app
-        if: vars.RELEASE_APP_CLIENT_ID != ''
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
-        with:
-          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
-          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
-          # Commits and tags on this repository. The git plugin commits only
-          # CHANGELOG.md and package.json, so workflows permission is not requested.
-          permission-contents: write
-
       - name: Checkout code
         uses: actions/checkout@v7
         with:
-          fetch-depth: 0
-          # altabella was removed from this repository. Do not fall through to
-          # the built-in token: that push does not start phase 2.
-          token: ${{ steps.app.outputs.token }}
-
-      - name: Git identity
-        if: steps.app.outputs.token != ''
-        env:
-          GH_TOKEN: ${{ steps.app.outputs.token }}
-          SLUG: ${{ steps.app.outputs.app-slug }}
-        run: |
-          id=$(gh api "/users/${SLUG}[bot]" --jq .id)
-          git config user.name "${SLUG}[bot]"
-          git config user.email "${id}+${SLUG}[bot]@users.noreply.github.com"
-          {
-            echo "GIT_AUTHOR_NAME=${SLUG}[bot]"
-            echo "GIT_AUTHOR_EMAIL=${id}+${SLUG}[bot]@users.noreply.github.com"
-            echo "GIT_COMMITTER_NAME=${SLUG}[bot]"
-            echo "GIT_COMMITTER_EMAIL=${id}+${SLUG}[bot]@users.noreply.github.com"
-          } >> "$GITHUB_ENV"
+          ref: ${{ github.sha }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -84,38 +76,23 @@ jobs:
       - name: Build application
         run: pnpm run build
 
-      - name: Run semantic-release
-        id: semantic
-        env:
-          GITHUB_TOKEN: ${{ steps.app.outputs.token }}
-          GH_TOKEN: ${{ steps.app.outputs.token }}
+      - name: Publish to npm
         run: |
-          # Run semantic-release to handle versioning and changelog
-          npx semantic-release
-          
-          # Check if a new version was created
-          if [ -f ".semantic-release-version" ]; then
-            VERSION=$(cat .semantic-release-version)
-            echo "new_release_published=true" >> $GITHUB_OUTPUT
-            echo "new_release_version=${VERSION}" >> $GITHUB_OUTPUT
-            echo "::notice::Published version ${VERSION}"
-          else
-            # Check package.json for version changes as fallback
-            VERSION=$(node -p "require('./package.json').version")
-            if git diff HEAD~1 package.json | grep -q '"version"'; then
-              echo "new_release_published=true" >> $GITHUB_OUTPUT
-              echo "new_release_version=${VERSION}" >> $GITHUB_OUTPUT
-              echo "::notice::Published version ${VERSION}"
-            else
-              echo "new_release_published=false" >> $GITHUB_OUTPUT
-              echo "::notice::No new release published"
-            fi
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME#v}"
+          manifest=$(node -p "require('./package.json').version")
+          if [ "$tag" != "$manifest" ]; then
+            echo "::error::tag v${tag} but package.json says ${manifest}"
+            exit 1
           fi
+          if npm view "gh-manager-cli@${manifest}" version >/dev/null 2>&1; then
+            echo "::notice::gh-manager-cli@${manifest} is already on npm"
+            exit 0
+          fi
+          npm publish --access public --provenance
 
   # Build binaries for multiple platforms
   build:
-    # Run only for release commits (when we have the new version)
-    if: ${{ startsWith(github.event.head_commit.message, 'chore(release):') }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -137,6 +114,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -182,7 +161,7 @@ jobs:
   # Create GitHub release and upload binaries
   create-release:
     needs: build
-    if: ${{ startsWith(github.event.head_commit.message, 'chore(release):') }}
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -207,6 +186,11 @@ jobs:
         id: get_version
         run: |
           VERSION=$(node -p "require('./package.json').version")
+          tag="${GITHUB_REF_NAME#v}"
+          if [ "$tag" != "$VERSION" ]; then
+            echo "::error::tag v${tag} but package.json says ${VERSION}"
+            exit 1
+          fi
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "Version: ${VERSION}"
           
@@ -233,8 +217,6 @@ jobs:
 
       - name: Create GitHub Release
         env:
-          # Phase 2 is started by the release commit, not by this release.
-          # Nothing in this repo listens for `release` or tag pushes.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ steps.get_version.outputs.version }}
         run: |
@@ -293,9 +275,15 @@ jobs:
 
   # Publish to other registries and update Homebrew
   publish-extras:
-    needs: create-release
-    if: ${{ startsWith(github.event.head_commit.message, 'chore(release):') }}
+    needs: [create-release, npm]
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
+    # One tap update at a time. A pull request's skipped job must not sit
+    # in the same slot as a real release: concurrency is joined before the
+    # job-level if.
+    concurrency:
+      group: ${{ startsWith(github.ref, 'refs/tags/v') && 'homebrew-tap-gh-manager-cli' || format('homebrew-tap-gh-manager-cli-{0}', github.run_id) }}
+      cancel-in-progress: false
     permissions:
       contents: read
       packages: write

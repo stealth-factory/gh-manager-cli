@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -106,6 +106,26 @@ describe('immutable GitHub release distribution (GMC-57)', () => {
     writeFileSync(join(f.cwd, 'calls.jsonl'), '');
     for (const step of ['Create GitHub Release', 'Upload binaries to release', 'Publish GitHub Release']) expect(f.run(step).status).toBe(0);
     expect(f.calls()).not.toMatch(/"(create|upload|edit)"/);
+  });
+
+  it('refuses a tag that does not match the manifest before touching a release', () => {
+    const f = fixture({ GITHUB_REF_NAME: 'v9.9.9' });
+    writeFileSync(join(f.cwd, 'package.json'), '{"version":"1.53.3"}\n');
+    writeFileSync(join(f.cwd, 'release.json'), JSON.stringify({ isDraft: true, assets: [] }));
+    const result = f.run('Get version and changelog');
+    expect(result.status).not.toBe(0);
+    expect(`${result.stdout}\n${result.stderr}`).toContain('tag v9.9.9 but package.json says 1.53.3');
+    expect(f.state().isDraft).toBe(true);
+    expect(existsSync(join(f.cwd, 'calls.jsonl'))).toBe(false);
+  });
+
+  it('records the manifest version when the tag matches', () => {
+    const f = fixture({ GITHUB_REF_NAME: 'v1.53.3', GITHUB_OUTPUT: 'github-output' });
+    writeFileSync(join(f.cwd, 'package.json'), '{"version":"1.53.3"}\n');
+    writeFileSync(join(f.cwd, 'CHANGELOG.md'), '## [1.53.3]\n\n- a fix\n');
+    expect(f.run('Get version and changelog').status).toBe(0);
+    expect(readFileSync(join(f.cwd, 'github-output'), 'utf8')).toContain('version=1.53.3');
+    expect(readFileSync(join(f.cwd, 'release_notes.md'), 'utf8')).toContain('## [1.53.3]');
   });
 
   it('rejects an existing published release whose assets are incomplete', () => {

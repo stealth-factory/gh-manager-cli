@@ -11,7 +11,8 @@
 - npmjs publishes the application directly as `gh-manager-cli`. GitHub Packages uses `@stealth-factory/gh-manager-cli`; the publish step temporarily changes the manifest name and registry, then restores both.
 - GitHub releases are created as drafts, receive all three binaries, and publish only after asset verification. Upload failures must fail the job. Existing published immutable releases are verified without modifying assets. Homebrew downloads retry for npm propagation and fail before tap mutation if the archive remains unavailable.
 - Downstream release/publication jobs check out the triggering `github.sha` to match the binary build. Missing tap credentials and rejected formula pushes must fail the job, rather than report a successful deployment.
-- Release commits on `main` and the Homebrew tap push mint the org GitHub App (`vars.RELEASE_APP_CLIENT_ID`, `secrets.RELEASE_APP_PRIVATE_KEY`) with `actions/create-github-app-token` pinned to `64ab729a6294000f5aa4a4bc0b73d1f32bc45510` (v3.3.0). `altabella` has been removed from this repository, so those jobs do not fall back to `secrets.GH_TOKEN` or `github.token`. GitHub release asset uploads stay on `GITHUB_TOKEN`: phase 2 is started by the `chore(release):` commit, and this repo has no `on: release` or tag workflow. The tap token is scoped to `stealth-factory/homebrew-tap` with contents write only.
+- Releases are pooled, in the opscope shape. `.github/workflows/release-pr.yml` batches conventional commits since the last tag into one `release` pull request (git-cliff, `cliff.toml`). Merging it is the release. `.github/workflows/tag-release.yml` tags that version, and `.github/workflows/release.yml` publishes only from the `v*` tag. A merge to `main` does not publish.
+- The release pull request, the tag push, and the Homebrew tap push mint the org GitHub App (`vars.RELEASE_APP_CLIENT_ID`, `secrets.RELEASE_APP_PRIVATE_KEY`) with `actions/create-github-app-token` pinned to `64ab729a6294000f5aa4a4bc0b73d1f32bc45510` (v3.3.0). `altabella` has been removed from this repository, so those jobs do not fall back to `secrets.GH_TOKEN`. The tag is pushed with the App token so the tag push starts `release.yml`. GitHub release asset uploads stay on `GITHUB_TOKEN`. The tap token is scoped to `stealth-factory/homebrew-tap` with contents write only. The release pull request token may also write pull requests in this repository.
 - npmjs releases use OIDC trusted publishing (`id-token: write`) for the unscoped package, with a token-free npm config and npm 11.19.0. Do not add `NPM_TOKEN` or `NODE_AUTH_TOKEN` to this job. The npm package needs a trusted publisher for `stealth-factory/gh-manager-cli`, workflow `release.yml`. GitHub Packages still uses its separate `GITHUB_TOKEN` authentication. The App has no Packages permission.
 
 ### Current Status: Active Development
@@ -85,17 +86,20 @@ gh-manager-cli/
 │       └── logger.ts          # File logger
 ├── tests/                     # Vitest + ink-testing-library, mirrors src/
 ├── dist/                      # Built output (gitignored)
-├── package.json               # NPM package config with semantic-release
+├── package.json               # NPM package config
+├── cliff.toml                 # git-cliff changelog and version bump rules
 ├── tsconfig.json              # TypeScript configuration
 ├── tsup.config.ts             # Build configuration (shebang-preserved ESM)
-├── CHANGELOG.md               # Generated changelog (semantic-release)
+├── CHANGELOG.md               # Generated changelog (git-cliff; older sections are semantic-release)
 ├── README.md                  # User documentation
 ├── LICENSE                    # MIT License
 ├── AGENTS.md                  # This file - project memory/instructions
 ├── .gitignore                 # Git ignore patterns
 └── .github/
     ├── workflows/
-    │   ├── release.yml    # Semantic release on main push
+    │   ├── release-pr.yml # Standing pooled release pull request
+    │   ├── tag-release.yml    # Tag the merged release pull request
+    │   ├── release.yml        # Publish from the tag only
     │   └── pr-title-manager.yml     # PR title automation
     └── scripts/
         └── normalize-pr-title.js    # PR title normalization logic
@@ -289,17 +293,17 @@ First run prompts for a PAT if not provided via env vars. The token is validated
 
 - `package.json` defines `bin: { "gh-manager-cli": "dist/index.js" }`.
 - For local dev: `pnpm link` exposes `gh-manager-cli` on PATH.
-- For publish: semantic-release publishes the application publicly as `gh-manager-cli`. Do not manually bump versions. See [scope migration](./docs/NPM_SCOPE_MIGRATION.md) and [release process](./docs/RELEASE_PROCESS.md).
+- For publish: the tagged release workflow publishes the application publicly as `gh-manager-cli`. Do not manually bump versions. See [scope migration](./docs/NPM_SCOPE_MIGRATION.md) and [release process](./docs/RELEASE_PROCESS.md).
 - **Standalone binaries:** `pnpm build:binaries` uses `@yao-pkg/pkg@6.20.0` (the maintained fork of the archived `vercel/pkg`) and emits `node22-*` targets. The CLI itself requires Node >=22.12.0 (`engines.node`) because Ink 7 and Vite 8 do. Building binaries also requires **Node.js 22.12 or later**: `@yao-pkg/pkg@6.20.0` / pkg-fetch v3.6 no longer ships `node20-*-win-x64`, so the script and the release workflow's binary job must run on Node 22+.
 
 ## Development Workflow
 
 ### Version Management
 - **Format:** Semantic versioning (MAJOR.MINOR.PATCH)
-- **Automation:** semantic-release handles version bumping and git tags
-- **Release process:** Automated via GitHub Actions on main branch push
+- **Automation:** git-cliff, via the release pull request, handles version bumping. `tag-release.yml` creates the tag. `release.yml` publishes that tag.
+- **Release process:** Merges to `main` update a standing release pull request. Merging that pull request tags and publishes. A merge by itself does not publish.
 - **Change tracking:** All releases documented in [CHANGELOG.md](./CHANGELOG.md)
-- **Do NOT manually edit [CHANGELOG.md](./CHANGELOG.md):** it is generated automatically by the semantic-release GitHub Actions workflow (`.github/workflows/release.yml`) from conventional commit messages on `main`. Manual edits cause merge conflicts and are overwritten on the next release. To influence the changelog, write a well-formed conventional commit / PR title instead. When a feature branch conflicts with `main` on CHANGELOG.md, resolve by taking `main`'s version.
+- **Do NOT manually edit [CHANGELOG.md](./CHANGELOG.md):** `.github/workflows/release-pr.yml` prepends it with git-cliff from conventional commits since the last tag. Do not regenerate the file; the sections from before this change were written by semantic-release and are kept. To influence the next section, write a well-formed conventional commit / PR title. When a feature branch conflicts with `main` on CHANGELOG.md, resolve by taking `main`'s version. The `release` branch is force-pushed; do not edit the changelog there.
 
 ### Code Standards
 - **TypeScript:** Strict mode with comprehensive type definitions
@@ -359,11 +363,11 @@ Every change should trace back to a Linear issue. To guarantee GitHub ↔ Linear
 
 ### Automated Release Process
 1. **PR Creation:** Titles automatically formatted to conventional commits
-2. **Main Branch Push:** Triggers semantic-release workflow
-3. **Version Calculation:** Based on commit types (feat = minor, fix = patch)
-4. **CHANGELOG.md:** Generated automatically from commits
-5. **GitHub Release:** Created with release notes
-6. **NPM Publishing:** OIDC trusted publishing, configured separately for both npm packages (see [Release Process](./docs/RELEASE_PROCESS.md))
+2. **Main Branch Push:** Updates the standing release pull request when the commits since the last tag include a releasable change (`feat`, `fix`, `perf`, `revert`, a `!` subject, or a `BREAKING CHANGE:` / `BREAKING-CHANGE:` footer)
+3. **Version Calculation:** git-cliff from those commits (`feat` = minor, `fix` and `perf` = patch, breaking = major)
+4. **CHANGELOG.md:** Prepended on the release pull request
+5. **Release decision:** Merging the release pull request tags `vX.Y.Z`
+6. **Publication:** The tag runs `release.yml`: draft GitHub Release with verified binaries, npm OIDC, GitHub Packages, and the Homebrew tap (see [Release Process](./docs/RELEASE_PROCESS.md))
 
 ## Known Issues & Solutions
 
@@ -413,7 +417,7 @@ serve a stale row. Both currently include the Bulk Select props
 8. Create PR (title will be auto-formatted)
 
 ### Task Tracking
-- There is no `TODOs.md`; planned work is tracked via [GitHub Issues](https://github.com/stealth-factory/gh-manager-cli/issues) and shipped work via [CHANGELOG.md](./CHANGELOG.md) (generated by semantic-release).
+- There is no `TODOs.md`; planned work is tracked via [GitHub Issues](https://github.com/stealth-factory/gh-manager-cli/issues) and shipped work via [CHANGELOG.md](./CHANGELOG.md) (prepended by git-cliff on the release pull request).
 - User-facing documentation lives in `wiki/`; keep the README concise and point to the relevant wiki pages.
 - The README's “Contributing & Feature Requests” section directs users to open issues for ideas and bugs.
 

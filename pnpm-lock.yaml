@@ -15,16 +15,16 @@ importers:
     dependencies:
       '@apollo/client':
         specifier: ^3.14.0
-        version: 3.14.0(@types/react@19.3.0)(graphql@16.14.2)(react@19.3.0)
+        version: 3.14.0(@types/react@19.3.0)(graphql@16.14.2)(react@19.3.1)
       '@octokit/graphql':
         specifier: ^9.0.5
         version: 9.0.5
       apollo3-cache-persist:
         specifier: ^0.15.0
-        version: 0.15.0(@apollo/client@3.14.0(@types/react@19.3.0)(graphql@16.14.2)(react@19.3.0))
+        version: 0.15.0(@apollo/client@3.14.0(@types/react@19.3.0)(graphql@16.14.2)(react@19.3.1))
       chalk:
         specifier: ^6.0.0
-        version: 6.0.0
+        version: 6.0.1
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
@@ -39,23 +39,23 @@ importers:
         version: 16.14.2
       ink:
         specifier: ^7.1.0
-        version: 7.1.1(@types/react@19.3.0)(react@19.3.0)
+        version: 7.1.1(@types/react@19.3.0)(react@19.3.1)
       ink-spinner:
         specifier: ^5.0.0
-        version: 5.0.0(ink@7.1.1(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)
+        version: 5.0.0(ink@7.1.1(@types/react@19.3.0)(react@19.3.1))(react@19.3.1)
       ink-text-input:
         specifier: ^6.0.0
-        version: 6.0.0(ink@7.1.1(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)
+        version: 6.0.0(ink@7.1.1(@types/react@19.3.0)(react@19.3.1))(react@19.3.1)
       open:
         specifier: ^11.0.4
         version: 11.0.4
       react:
         specifier: ^19.3.0
-        version: 19.3.0
+        version: 19.3.1
     devDependencies:
       '@types/node':
         specifier: ^26.6.5
-        version: 26.6.5
+        version: 26.6.6
       '@types/react':
         specifier: ^19.3.0
         version: 19.3.0
@@ -64,22 +64,22 @@ importers:
         version: 4.1.10(vitest@4.1.10)
       '@yao-pkg/pkg':
         specifier: ^6.23.0
-        version: 6.23.0
+        version: 6.24.0(supports-color@7.2.0)
       ink-testing-library:
         specifier: ^4.0.0
         version: 4.0.0(@types/react@19.3.0)
       tsup:
         specifier: ^8.5.1
-        version: 8.5.1(postcss@8.5.32)(typescript@7.0.2)
+        version: 8.5.1(postcss@8.5.32)(supports-color@7.2.0)(typescript@7.0.2)
       typescript:
         specifier: ^7.0.2
         version: 7.0.2
       vite:
         specifier: ^8.3.4
-        version: 8.3.4(@types/node@26.6.5)(esbuild@0.27.7)
+        version: 8.3.5(@types/node@26.6.6)(esbuild@0.27.7)
       vitest:
         specifier: ^4.1.9
-        version: 4.1.10(@types/node@26.6.5)(@vitest/coverage-v8@4.1.10)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.27.7))
+        version: 4.1.10(@types/node@26.6.6)(@vitest/coverage-v8@4.1.10)(vite@8.3.5(@types/node@26.6.6)(esbuild@0.27.7))
 
 packages:
 
@@ -779,8 +779,8 @@ packages:
   '@types/estree@1.0.9':
     resolution: {integrity: sha512-GhdPgy1el4/ImP05X05Uw4cw2/M93BCUmnEvWZNStlCzEKME4Fkk+YpoA5OiHNQmoS7Cafb8Xa3Pya8m1Qrzeg==}
 
-  '@types/node@26.6.5':
-    resolution: {integrity: sha512-uMzsv9stDdofIZBx4UGh4Z9ZgXnGC9seRDscilBcTHAeOFk67MZg/k9bWVfO+bk4qZmG+l52hRnLwUiH2LnJTg==}
+  '@types/node@26.6.6':
+    resolution: {integrity: sha512-MzQj+8Kx3XI40OmUAE6Qoh58ZMNstNNMwn2nfd3qWsfe7nDNSqJNzes4njhz6AHwrSHOffSLwXU6yb474Q4aog==}
 
   '@types/react@19.3.0':
     resolution: {integrity: sha512-N0rFCuH9YoxG9/m61l9MfpJKfmLOVU0em7ipIz6TRgSSkvReLB9vL85GB+yr8Bs5leqpvg96JSwF4ZS1s4viQg==}
@@ -959,12 +959,12 @@ packages:
     resolution: {integrity: sha512-FNoYzHawTMk/6KMQoEG5O4PuioX19UbwdQKF44yw0nLfOypfQdjtfZzo/UIJWAJ23sNIFbD1Ug9lbaDGMwbqQA==}
     engines: {node: '>=8'}
 
-  '@yao-pkg/pkg-fetch@3.6.6':
-    resolution: {integrity: sha512-Nu9ytHewcV6FuH4WvdpYZxz2XwiP2p30jlPBzbvwsS3OPYN7RRTyGrXhcmhS59O3AdXz/LW+4bozhV3alN+MEA==}
+  '@yao-pkg/pkg-fetch@3.6.7':
+    resolution: {integrity: sha512-uEeU5druVgHffruTAXzW6nf0wHfREWlCq5LBtQ4hCdLBDbwTteuym5NrxREur3EgNcqFRenEi6Rivwo723PkHg==}
     hasBin: true
 
-  '@yao-pkg/pkg@6.23.0':
-    resolution: {integrity: sha512-+d8iqRcmDxPpTE5fbSmsn1rShktIKvMcQGcFhwLdH15A4g2fBcRVLXppeQmu9fbF98bhYXjCOj6UTf3odXxWiA==}
+  '@yao-pkg/pkg@6.24.0':
+    resolution: {integrity: sha512-SMwFLic12noHLbqxhhQVClVX6YZlQtzwwez6dq7Xj64rXX6OFgZTTQbPgw4wgec5IoUN+6rCRKgyW/cnVPOwkA==}
     engines: {node: '>=22.0.0'}
     hasBin: true
 
@@ -1097,8 +1097,8 @@ packages:
     resolution: {integrity: sha512-7NzBL0rN6fMUW+f7A6Io4h40qQlG+xGmtMxfbnH/K7TAtt8JQWVQK+6g0UXKMeVJoyV5EkkNsErQ8pVD3bLHbA==}
     engines: {node: ^12.17.0 || ^14.13 || >=16.0.0}
 
-  chalk@6.0.0:
-    resolution: {integrity: sha512-2uNTXIuTTxk7ciZgAU1BQcgnchcG0xXnrs6jzkQfj9SsRa9M2s5zE8WT96hS6KmG4MzWHSrvH43DF1m4XRkrFg==}
+  chalk@6.0.1:
+    resolution: {integrity: sha512-/Ce6KNm3vIbWdMlNna6RVIZ/ICQxnJxCicet5LBKK9ZffBkqzDw0xh9EiKSljdRtiIQ1S1z4YgcscUUGzNCWrA==}
     engines: {node: '>=22'}
 
   chokidar@4.0.3:
@@ -1783,8 +1783,8 @@ packages:
     peerDependencies:
       react: ^19.2.0
 
-  react@19.3.0:
-    resolution: {integrity: sha512-E8LUcbtBWt20bbl2YoHfx4ZDBdxVTfOKtCZn9cDSJ4l6/nuoApcpIBcj47t2wZoVX8g2ZHuMHbiShgCR1T5Sog==}
+  react@19.3.1:
+    resolution: {integrity: sha512-QNhWdt7nrgVWWQG58QuGsAR3jv3Hbe4mb4vz7w2csnHavciZJgda1CPNaldF6eVxv90ud3jUXpKlHL69gO38yw==}
     engines: {node: '>=0.10.0'}
 
   readable-stream@2.3.8:
@@ -1855,11 +1855,6 @@ packages:
 
   semver@7.8.5:
     resolution: {integrity: sha512-Y7/KDsb8LjooZpwaqGyulO6DQlksgCncchHGk+sZIY4SBvUocMBEFH5Ur1fI4dV+Jvl0w6cjvucaIi40puRioA==}
-    engines: {node: '>=10'}
-    hasBin: true
-
-  semver@7.8.6:
-    resolution: {integrity: sha512-9lpSSU4Mly3mrtruwLs1eLK6+gzbzqeBFwRNjIjE+9LuDpWdYctrQlQ3ej1Ilgi7gknpsTRnPoLP8DpCHqHIJw==}
     engines: {node: '>=10'}
     hasBin: true
 
@@ -2090,13 +2085,13 @@ packages:
   util-deprecate@1.0.2:
     resolution: {integrity: sha512-EPD5q1uXyFxJpCrLnCc1nHnq3gOa6DZBocAIiI2TaSCA7VCJ1UJDMagCzIkXNsUYfD1daK//LTEQ8xiIbrHtcw==}
 
-  vite@8.3.4:
-    resolution: {integrity: sha512-IftLE8phJhdNRIGNEV4JCCvfNScoZQVfcXaN8TQropWGJtOHcu+iAB9pHcuGvmEb/kddw0LBe/jS8ztdC6xdiQ==}
+  vite@8.3.5:
+    resolution: {integrity: sha512-z1YpjieJ9g0ebTmQpLBv/oq9E3F9EIlOe+7LahW8SrE3LTiG3udBRUXQOlYXP9b+IC2q2phHeVxj9xGlw34OEQ==}
     engines: {node: ^20.19.0 || >=22.12.0}
     hasBin: true
     peerDependencies:
       '@types/node': ^20.19.0 || >=22.12.0
-      '@vitejs/devtools': ^0.7.1
+      '@vitejs/devtools': ^0.7.1 || ^0.8.0
       esbuild: ^0.27.0 || ^0.28.0
       jiti: '>=1.21.0'
       less: ^4.0.0
@@ -2251,7 +2246,7 @@ snapshots:
       ansi-styles: 6.2.3
       is-fullwidth-code-point: 5.1.0
 
-  '@apollo/client@3.14.0(@types/react@19.3.0)(graphql@16.14.2)(react@19.3.0)':
+  '@apollo/client@3.14.0(@types/react@19.3.0)(graphql@16.14.2)(react@19.3.1)':
     dependencies:
       '@graphql-typed-document-node/core': 3.2.0(graphql@16.14.2)
       '@wry/caches': 1.0.1
@@ -2262,13 +2257,13 @@ snapshots:
       hoist-non-react-statics: 3.3.2
       optimism: 0.18.1
       prop-types: 15.8.1
-      rehackt: 0.1.0(@types/react@19.3.0)(react@19.3.0)
+      rehackt: 0.1.0(@types/react@19.3.0)(react@19.3.1)
       symbol-observable: 4.0.0
       ts-invariant: 0.10.3
       tslib: 2.8.1
       zen-observable-ts: 1.2.5
     optionalDependencies:
-      react: 19.3.0
+      react: 19.3.1
     transitivePeerDependencies:
       - '@types/react'
 
@@ -2308,7 +2303,7 @@ snapshots:
       '@babel/parser': 7.29.12
       '@babel/types': 7.29.11
 
-  '@babel/traverse@7.29.12':
+  '@babel/traverse@7.29.12(supports-color@7.2.0)':
     dependencies:
       '@babel/code-frame': 7.29.7
       '@babel/generator': 7.29.12
@@ -2316,7 +2311,7 @@ snapshots:
       '@babel/parser': 7.29.12
       '@babel/template': 7.29.7
       '@babel/types': 7.29.11
-      debug: 4.4.3
+      debug: 4.4.3(supports-color@7.2.0)
     transitivePeerDependencies:
       - supports-color
 
@@ -2689,7 +2684,7 @@ snapshots:
 
   '@types/estree@1.0.9': {}
 
-  '@types/node@26.6.5':
+  '@types/node@26.6.6':
     dependencies:
       undici-types: 8.9.0
 
@@ -2769,7 +2764,7 @@ snapshots:
       obug: 2.1.4
       std-env: 4.2.0
       tinyrainbow: 3.1.1
-      vitest: 4.1.10(@types/node@26.6.5)(@vitest/coverage-v8@4.1.10)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.27.7))
+      vitest: 4.1.10(@types/node@26.6.6)(@vitest/coverage-v8@4.1.10)(vite@8.3.5(@types/node@26.6.6)(esbuild@0.27.7))
 
   '@vitest/expect@4.1.10':
     dependencies:
@@ -2780,13 +2775,13 @@ snapshots:
       chai: 6.2.2
       tinyrainbow: 3.1.1
 
-  '@vitest/mocker@4.1.10(vite@8.3.4(@types/node@26.6.5)(esbuild@0.27.7))':
+  '@vitest/mocker@4.1.10(vite@8.3.5(@types/node@26.6.6)(esbuild@0.27.7))':
     dependencies:
       '@vitest/spy': 4.1.10
       estree-walker: 3.0.3
       magic-string: 0.30.21
     optionalDependencies:
-      vite: 8.3.4(@types/node@26.6.5)(esbuild@0.27.7)
+      vite: 8.3.5(@types/node@26.6.6)(esbuild@0.27.7)
 
   '@vitest/pretty-format@4.1.10':
     dependencies:
@@ -2828,11 +2823,11 @@ snapshots:
     dependencies:
       tslib: 2.8.1
 
-  '@yao-pkg/pkg-fetch@3.6.6':
+  '@yao-pkg/pkg-fetch@3.6.7':
     dependencies:
       picocolors: 1.1.1
       progress: 2.0.3
-      semver: 7.8.6
+      semver: 7.8.5
       tar-fs: 3.1.3
       undici: 7.30.1
       yargs: 16.2.2
@@ -2841,14 +2836,14 @@ snapshots:
       - bare-buffer
       - react-native-b4a
 
-  '@yao-pkg/pkg@6.23.0':
+  '@yao-pkg/pkg@6.24.0(supports-color@7.2.0)':
     dependencies:
       '@babel/generator': 7.29.12
       '@babel/parser': 7.29.12
-      '@babel/traverse': 7.29.12
+      '@babel/traverse': 7.29.12(supports-color@7.2.0)
       '@babel/types': 7.29.11
       '@roberts_lando/vfs': 0.3.3
-      '@yao-pkg/pkg-fetch': 3.6.6
+      '@yao-pkg/pkg-fetch': 3.6.7
       esbuild: 0.28.2
       into-stream: 9.1.0
       multistream: 4.1.0
@@ -2886,9 +2881,9 @@ snapshots:
 
   any-promise@1.3.0: {}
 
-  apollo3-cache-persist@0.15.0(@apollo/client@3.14.0(@types/react@19.3.0)(graphql@16.14.2)(react@19.3.0)):
+  apollo3-cache-persist@0.15.0(@apollo/client@3.14.0(@types/react@19.3.0)(graphql@16.14.2)(react@19.3.1)):
     dependencies:
-      '@apollo/client': 3.14.0(@types/react@19.3.0)(graphql@16.14.2)(react@19.3.0)
+      '@apollo/client': 3.14.0(@types/react@19.3.0)(graphql@16.14.2)(react@19.3.1)
 
   assertion-error@2.0.1: {}
 
@@ -2967,7 +2962,7 @@ snapshots:
 
   chalk@5.6.2: {}
 
-  chalk@6.0.0: {}
+  chalk@6.0.1: {}
 
   chokidar@4.0.3:
     dependencies:
@@ -3030,13 +3025,17 @@ snapshots:
 
   csstype@3.2.3: {}
 
-  debug@4.4.1:
+  debug@4.4.1(supports-color@7.2.0):
     dependencies:
       ms: 2.1.3
+    optionalDependencies:
+      supports-color: 7.2.0
 
-  debug@4.4.3:
+  debug@4.4.3(supports-color@7.2.0):
     dependencies:
       ms: 2.1.3
+    optionalDependencies:
+      supports-color: 7.2.0
 
   decompress-response@6.0.0:
     dependencies:
@@ -3161,9 +3160,9 @@ snapshots:
 
   fast-fifo@1.3.2: {}
 
-  fdir@6.5.0(picomatch@4.0.5):
+  fdir@6.5.0(picomatch@4.0.7):
     optionalDependencies:
-      picomatch: 4.0.5
+      picomatch: 4.0.7
 
   fix-dts-default-cjs-exports@1.0.1:
     dependencies:
@@ -3235,24 +3234,24 @@ snapshots:
 
   ini@1.3.8: {}
 
-  ink-spinner@5.0.0(ink@7.1.1(@types/react@19.3.0)(react@19.3.0))(react@19.3.0):
+  ink-spinner@5.0.0(ink@7.1.1(@types/react@19.3.0)(react@19.3.1))(react@19.3.1):
     dependencies:
       cli-spinners: 2.9.2
-      ink: 7.1.1(@types/react@19.3.0)(react@19.3.0)
-      react: 19.3.0
+      ink: 7.1.1(@types/react@19.3.0)(react@19.3.1)
+      react: 19.3.1
 
   ink-testing-library@4.0.0(@types/react@19.3.0):
     optionalDependencies:
       '@types/react': 19.3.0
 
-  ink-text-input@6.0.0(ink@7.1.1(@types/react@19.3.0)(react@19.3.0))(react@19.3.0):
+  ink-text-input@6.0.0(ink@7.1.1(@types/react@19.3.0)(react@19.3.1))(react@19.3.1):
     dependencies:
       chalk: 5.6.2
-      ink: 7.1.1(@types/react@19.3.0)(react@19.3.0)
-      react: 19.3.0
+      ink: 7.1.1(@types/react@19.3.0)(react@19.3.1)
+      react: 19.3.1
       type-fest: 4.41.0
 
-  ink@7.1.1(@types/react@19.3.0)(react@19.3.0):
+  ink@7.1.1(@types/react@19.3.0)(react@19.3.1):
     dependencies:
       '@alcalzone/ansi-tokenize': 0.3.0
       ansi-escapes: 7.3.0
@@ -3267,8 +3266,8 @@ snapshots:
       indent-string: 5.0.0
       is-in-ci: 2.0.0
       patch-console: 2.0.0
-      react: 19.3.0
-      react-reconciler: 0.33.0(react@19.3.0)
+      react: 19.3.1
+      react-reconciler: 0.33.0(react@19.3.1)
       scheduler: 0.27.0
       signal-exit: 3.0.7
       slice-ansi: 9.0.0
@@ -3472,7 +3471,7 @@ snapshots:
 
   node-abi@3.101.0:
     dependencies:
-      semver: 7.8.6
+      semver: 7.8.5
 
   node-int64@0.4.0: {}
 
@@ -3590,12 +3589,12 @@ snapshots:
 
   react-is@16.13.1: {}
 
-  react-reconciler@0.33.0(react@19.3.0):
+  react-reconciler@0.33.0(react@19.3.1):
     dependencies:
-      react: 19.3.0
+      react: 19.3.1
       scheduler: 0.27.0
 
-  react@19.3.0: {}
+  react@19.3.1: {}
 
   readable-stream@2.3.8:
     dependencies:
@@ -3615,10 +3614,10 @@ snapshots:
 
   readdirp@4.1.2: {}
 
-  rehackt@0.1.0(@types/react@19.3.0)(react@19.3.0):
+  rehackt@0.1.0(@types/react@19.3.0)(react@19.3.1):
     optionalDependencies:
       '@types/react': 19.3.0
-      react: 19.3.0
+      react: 19.3.1
 
   require-directory@2.1.1: {}
 
@@ -3699,8 +3698,6 @@ snapshots:
   scheduler@0.27.0: {}
 
   semver@7.8.5: {}
-
-  semver@7.8.6: {}
 
   shebang-command@2.0.0:
     dependencies:
@@ -3884,8 +3881,8 @@ snapshots:
 
   tinyglobby@0.2.17:
     dependencies:
-      fdir: 6.5.0(picomatch@4.0.5)
-      picomatch: 4.0.5
+      fdir: 6.5.0(picomatch@4.0.7)
+      picomatch: 4.0.7
 
   tinyrainbow@3.1.1: {}
 
@@ -3899,13 +3896,13 @@ snapshots:
 
   tslib@2.8.1: {}
 
-  tsup@8.5.1(postcss@8.5.32)(typescript@7.0.2):
+  tsup@8.5.1(postcss@8.5.32)(supports-color@7.2.0)(typescript@7.0.2):
     dependencies:
       bundle-require: 5.1.0(esbuild@0.27.7)
       cac: 6.7.14
       chokidar: 4.0.3
       consola: 3.4.2
-      debug: 4.4.1
+      debug: 4.4.1(supports-color@7.2.0)
       esbuild: 0.27.7
       fix-dts-default-cjs-exports: 1.0.1
       joycon: 3.1.1
@@ -3980,7 +3977,7 @@ snapshots:
 
   util-deprecate@1.0.2: {}
 
-  vite@8.3.4(@types/node@26.6.5)(esbuild@0.27.7):
+  vite@8.3.5(@types/node@26.6.6)(esbuild@0.27.7):
     dependencies:
       lightningcss: 1.33.0
       picomatch: 4.0.7
@@ -3988,14 +3985,14 @@ snapshots:
       rolldown: 1.2.16
       tinyglobby: 0.2.17
     optionalDependencies:
-      '@types/node': 26.6.5
+      '@types/node': 26.6.6
       esbuild: 0.27.7
       fsevents: 2.3.3
 
-  vitest@4.1.10(@types/node@26.6.5)(@vitest/coverage-v8@4.1.10)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.27.7)):
+  vitest@4.1.10(@types/node@26.6.6)(@vitest/coverage-v8@4.1.10)(vite@8.3.5(@types/node@26.6.6)(esbuild@0.27.7)):
     dependencies:
       '@vitest/expect': 4.1.10
-      '@vitest/mocker': 4.1.10(vite@8.3.4(@types/node@26.6.5)(esbuild@0.27.7))
+      '@vitest/mocker': 4.1.10(vite@8.3.5(@types/node@26.6.6)(esbuild@0.27.7))
       '@vitest/pretty-format': 4.1.10
       '@vitest/runner': 4.1.10
       '@vitest/snapshot': 4.1.10
@@ -4012,10 +4009,10 @@ snapshots:
       tinyexec: 1.3.0
       tinyglobby: 0.2.17
       tinyrainbow: 3.1.1
-      vite: 8.3.4(@types/node@26.6.5)(esbuild@0.27.7)
+      vite: 8.3.5(@types/node@26.6.6)(esbuild@0.27.7)
       why-is-node-running: 2.3.0
     optionalDependencies:
-      '@types/node': 26.6.5
+      '@types/node': 26.6.6
       '@vitest/coverage-v8': 4.1.10(vitest@4.1.10)
     transitivePeerDependencies:
       - msw

@@ -13,8 +13,9 @@ name: release-pr
 on:
   push:
     branches: [main]
-  # For when you want to see what the next release would be without
-  # waiting for a merge.
+  # A manual refresh of the standing release pull request. The job
+  # below refuses every ref except main, so a dispatch from a feature
+  # branch cannot force-push that branch onto release.
   workflow_dispatch:
 
 permissions:
@@ -29,6 +30,7 @@ concurrency:
 
 jobs:
   prepare:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Require the release app
@@ -208,7 +210,12 @@ jobs:
             "comes from the conventional commits on main." \
             "" \
             "---")
-          notes=$(awk '/^## \[/{n++} n==1' CHANGELOG.md | head -60)
+          # Stop inside awk. head would close the pipe early, and pipefail
+          # would then fail this step after the release branch was pushed.
+          notes=$(awk '
+            /^## \[/{ n++; if (n > 1) exit }
+            n == 1 { print; c++; if (c >= 60) exit }
+          ' CHANGELOG.md)
           full=$(printf '%s\n\n%s\n' "$body" "$notes")
           # An explicit search for an OPEN pull request, by number. `gh pr view`
           # falls back to the most recently merged pull request when none is

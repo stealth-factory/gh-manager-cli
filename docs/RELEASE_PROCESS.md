@@ -19,13 +19,13 @@ The executable remains `gh-manager-cli`. Configuration, preferences, cache, and 
 
 `feat:` is a minor bump. `fix:` and `perf:` are patch bumps. A breaking change is a major bump, whether it is marked with `!` in the subject or with a `BREAKING CHANGE:` / `BREAKING-CHANGE:` footer. `revert:` is included. Documentation and maintenance commits do not open a release by themselves; they are listed in the changelog of the next real release. git-cliff would otherwise bump the patch for any commit, so the workflow ignores a range that has none of those releasable commits.
 
-When there is something to release, the workflow prepends a changelog section, bumps `package.json`, and opens or updates one pull request from the `release` branch. That branch is force-pushed. Do not commit to it. The changelog text comes from the conventional commits on `main`. To change a line, change that commit message; do not edit `CHANGELOG.md` by hand. Merging the pull request is the release. Until then nothing is tagged or published.
+When there is something to release, the workflow prepends a changelog section, bumps `package.json`, and opens or updates one pull request from the `release` branch. That branch is force-pushed. Do not commit to it. The changelog text comes from the conventional commits on `main`. To change a line, change that commit message; do not edit `CHANGELOG.md` by hand. A manual run is accepted only from `main`; a dispatch from another branch does not rewrite `release`. Merging the pull request is the release. Until then nothing is tagged or published.
 
 Do not manually bump the version or edit `CHANGELOG.md`. The historical sections were written by semantic-release; new sections are prepended by git-cliff and are not a rewrite of that history.
 
 ## What merging the release pull request does
 
-`.github/workflows/tag-release.yml` runs on the push to `main`. If `package.json` names a version that has no tag yet, it pushes an annotated `vX.Y.Z` tag with the org GitHub App token. That tag push starts publication. A version that is already tagged is left alone.
+`.github/workflows/tag-release.yml` runs on the push to `main`. It pushes an annotated `vX.Y.Z` tag only when that commit is the merge of the `release` pull request and `package.json` names a version that has no tag yet. The tag push starts publication. Any other push, including one that changes `package.json`, is left untagged. A version that is already tagged is left alone.
 
 ## What the tag publishes
 

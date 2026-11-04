@@ -4,8 +4,9 @@
 # and turns it into a tag. The tag push starts release.yml. Nothing here
 # publishes.
 #
-# It fires on any push to main and does nothing unless the version in
-# package.json has no tag yet, so re-running it is harmless.
+# It fires on any push to main. It tags only when that commit is the
+# merge of the release pull request and the version has no tag yet.
+# Any other push, including one that edits package.json, is left alone.
 name: tag-release
 
 on:
@@ -38,6 +39,7 @@ jobs:
           client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
           permission-contents: write
+          permission-pull-requests: read
 
       - name: Checkout code
         uses: actions/checkout@v7
@@ -57,8 +59,29 @@ jobs:
 
       - name: Tag it, if this version has not been tagged
         id: tag
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
         run: |
           set -euo pipefail
+          if [ -z "${GH_TOKEN}" ]; then
+            echo "::error::Tagging a release requires the org GitHub App token"
+            exit 1
+          fi
+          # The push to main is not enough. Publication starts only from the
+          # squash or merge commit of the release pull request.
+          sha="${GITHUB_SHA}"
+          if [ -z "$sha" ]; then
+            echo "::error::tagging a release requires the pushed commit"
+            exit 1
+          fi
+          match=$(gh api -H "Accept: application/vnd.github+json" \
+            "repos/${GITHUB_REPOSITORY}/commits/${sha}/pulls" \
+            | jq -r --arg sha "$sha" '[.[] | select(.merged_at != null and .head.ref == "release" and .base.ref == "main" and .merge_commit_sha == $sha)] | length')
+          if [ "$match" = "0" ]; then
+            echo "not a merged release pull request; nothing to tag"
+            echo "tagged=no" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           version=$(node -p "require('./package.json').version")
           if [ -z "$version" ]; then
             echo "::error::no version in package.json"

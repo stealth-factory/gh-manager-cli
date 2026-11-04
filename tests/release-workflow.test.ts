@@ -92,6 +92,16 @@ if (args[0] === 'api' && args[2] === '--jq' && args[3] === '.id' && /^\\/users\\
   console.log(process.env.MOCK_BOT_ID || '4242');
   process.exit(0);
 }
+if (args[0] === 'pr' && args[1] === 'list') process.exit(0);
+if (args[0] === 'api' && args.includes('--input')) {
+  fs.writeFileSync(path.join(process.env.MOCK_ROOT, 'gh-api-body.json'), fs.readFileSync(0, 'utf8'));
+  console.log('https://example.test/pull/1');
+  process.exit(0);
+}
+if (args[0] === 'api' && args.some(arg => arg.includes('/commits/') && arg.includes('/pulls'))) {
+  console.log(process.env.MOCK_COMMIT_PULLS || '[]');
+  process.exit(0);
+}
 process.exit(99);
 `, { mode: 0o755 });
   writeFileSync(join(bin, 'git'), `#!/usr/bin/env node
@@ -103,6 +113,7 @@ if (args[0] === 'clone') {
   fs.mkdirSync('tap-repo/Formula', { recursive: true });
   fs.copyFileSync('source-formula.rb', 'tap-repo/Formula/gh-manager-cli.rb');
 } else if (args[0] === 'diff') process.exit(process.env.MOCK_NO_CHANGES === '1' ? 0 : 1);
+else if (args[0] === 'rev-parse') process.exit(process.env.MOCK_TAG_EXISTS === '1' ? 0 : 1);
 else if (args[0] === 'push' && process.env.MOCK_PUSH_FAILURE === '1') process.exit(9);
 `, { mode: 0o755 });
   const env = {
@@ -306,12 +317,15 @@ describe('org GitHub App token', () => {
     expect(releasePr).toContain('BREAKING[- ]CHANGE:');
     expect(releasePr).toContain('conventional commits on main');
     expect(releasePr).not.toContain('edit the changelog');
+    expect(releasePr).toContain("if: github.ref == 'refs/heads/main'");
+    expect(releasePr).not.toContain('head -60');
 
     expect(tagRelease).toContain('branches: [main]');
     expect(tagRelease).toMatch(/\npermissions:\n {2}contents: read\b/);
     expect(tagRelease).not.toMatch(/\n {2}contents: write\n/);
     expect(tagRelease).toContain('permission-contents: write');
-    expect(tagRelease).not.toContain('permission-pull-requests');
+    expect(tagRelease).toContain('permission-pull-requests: read');
+    expect(tagRelease).not.toContain('permission-pull-requests: write');
     expect(tagRelease).not.toMatch(/\bnpm publish\b/);
     expect(tagRelease).toContain('git push origin "$tag"');
 
@@ -378,6 +392,86 @@ describe('org GitHub App token', () => {
     expect(calls).not.toContain('github-actions[bot]');
     expect(calls).toContain('x-access-token:app-token@github.com/stealth-factory/homebrew-tap.git');
     expect(existsSync(join(f.directory, 'gh-calls.jsonl'))).toBe(false);
+  });
+});
+
+describe('release pull request update', () => {
+  it('keeps the first sixty changelog lines when the section is longer', () => {
+    const f = fixture({
+      GH_TOKEN: 'app-token',
+      NEXT: '1.54.0',
+      GITHUB_REPOSITORY: 'stealth-factory/gh-manager-cli',
+    });
+    const section = ['## [1.54.0]', ...Array.from({ length: 80 }, (_, index) => `change ${index}`)];
+    writeFileSync(join(f.directory, 'CHANGELOG.md'), [...section, '## [1.53.3]', 'older'].join('\n') + '\n');
+    const result = f.run('Open or update the release pull request', 'prepare', releasePr);
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    const sent = JSON.parse(readFileSync(join(f.directory, 'gh-api-body.json'), 'utf8')) as { body: string };
+    expect(sent.body).not.toContain('## [1.53.3]');
+    expect(sent.body).not.toContain('change 70');
+    const notes = sent.body.split('---\n\n')[1] ?? '';
+    expect(notes.trim().split('\n')).toHaveLength(60);
+  });
+});
+
+describe('release tagging', () => {
+  const sha = 'abc123';
+
+  function tagRun(pulls: unknown[], extra: Record<string, string> = {}) {
+    const f = fixture({
+      GH_TOKEN: 'app-token',
+      GITHUB_SHA: sha,
+      GITHUB_REPOSITORY: 'stealth-factory/gh-manager-cli',
+      GITHUB_OUTPUT: 'github-output',
+      MOCK_COMMIT_PULLS: JSON.stringify(pulls),
+      ...extra,
+    });
+    const result = f.run('Tag it, if this version has not been tagged', 'tag', tagRelease);
+    return { f, result };
+  }
+
+  it('tags the merge commit of the release pull request', () => {
+    const { f, result } = tagRun([{
+      merged_at: '2026-11-04T00:00:00Z',
+      head: { ref: 'release' },
+      base: { ref: 'main' },
+      merge_commit_sha: sha,
+    }]);
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    const calls = readFileSync(join(f.directory, 'git-calls.jsonl'), 'utf8');
+    expect(calls).toContain('["tag","-a","v1.54.0","-m","v1.54.0"]');
+    expect(calls).toContain('["push","origin","v1.54.0"]');
+    expect(readFileSync(join(f.directory, 'github-output'), 'utf8')).toContain('tagged=yes');
+  });
+
+  it('does not tag a push from another pull request', () => {
+    const { f, result } = tagRun([{
+      merged_at: '2026-11-04T00:00:00Z',
+      head: { ref: 'cursor/pooled-release-b1b8' },
+      base: { ref: 'main' },
+      merge_commit_sha: sha,
+    }]);
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    expect(existsSync(join(f.directory, 'git-calls.jsonl'))).toBe(false);
+    expect(readFileSync(join(f.directory, 'github-output'), 'utf8')).toContain('tagged=no');
+  });
+
+  it('does not tag when the release pull request merged a different commit', () => {
+    const { f, result } = tagRun([{
+      merged_at: '2026-11-04T00:00:00Z',
+      head: { ref: 'release' },
+      base: { ref: 'main' },
+      merge_commit_sha: 'other',
+    }]);
+    expect(result.status).toBe(0);
+    expect(existsSync(join(f.directory, 'git-calls.jsonl'))).toBe(false);
+    expect(readFileSync(join(f.directory, 'github-output'), 'utf8')).toContain('tagged=no');
+  });
+
+  it('refuses to tag without the app token', () => {
+    const { result } = tagRun([], { GH_TOKEN: '' });
+    expect(result.status).not.toBe(0);
+    expect(result.stdout).toContain('Tagging a release requires the org GitHub App token');
   });
 });
 

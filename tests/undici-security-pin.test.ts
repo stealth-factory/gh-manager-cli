@@ -28,9 +28,18 @@ function isPatched(version: string): boolean {
   return minor > floorMinor || (minor === floorMinor && patch >= floorPatch);
 }
 
+const PNPM8_OVERRIDES = {
+  '@actions/http-client>undici': '6.29.1',
+  '@semantic-release/github>undici': '7.30.1',
+  '@yao-pkg/pkg-fetch>undici': '7.30.1',
+} as const;
+
 describe('transitive undici security pin', () => {
   const lockfile = readRepoFile('pnpm-lock.yaml');
   const workspace = readRepoFile('pnpm-workspace.yaml');
+  const pkg = JSON.parse(readRepoFile('package.json')) as {
+    pnpm?: { overrides?: Record<string, string> };
+  };
   const resolved = [...new Set(
     [...lockfile.matchAll(/^  undici@(\d+\.\d+\.\d+):/gm)].map(match => match[1]),
   )].sort();
@@ -45,8 +54,11 @@ describe('transitive undici security pin', () => {
   });
 
   it('overrides each parent that pulls undici, so a fresh install cannot drift back', () => {
-    expect(workspace).toContain('"@actions/http-client>undici": "6.29.1"');
-    expect(workspace).toContain('"@semantic-release/github>undici": "7.30.1"');
-    expect(workspace).toContain('"@yao-pkg/pkg-fetch>undici": "7.30.1"');
+    // Release jobs run pnpm 8, which applies package.json pnpm.overrides and
+    // ignores overrides in pnpm-workspace.yaml. Keep both in sync.
+    expect(pkg.pnpm?.overrides).toEqual(PNPM8_OVERRIDES);
+    for (const [parent, version] of Object.entries(PNPM8_OVERRIDES)) {
+      expect(workspace).toContain(`"${parent}": "${version}"`);
+    }
   });
 });

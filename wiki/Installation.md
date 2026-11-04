@@ -28,20 +28,22 @@ Your saved authentication, preferences, and cache use the same application paths
 
 The signed Stealth Factory apt repository publishes `gh-manager-cli` for Linux amd64 with glibc 2.35 or newer. There is no arm64 package. npm remains available if you already use Node.
 
-Add the repository, then install the package. Compare the key's primary fingerprints with the set announced by Stealth Factory before you trust it. `Signed-By` limits this key to this source. Do not use `apt-key`, `trusted=yes`, or turn signature checks off.
+Add the repository, then install the package. The key is downloaded into a private directory from `mktemp -d`, so another user cannot replace it between the fingerprint check and `sudo install`. Compare the key's primary fingerprints with the set announced by Stealth Factory before you trust it. `Signed-By` limits this key to this source. Do not use `apt-key`, `trusted=yes`, or turn signature checks off.
 
 ```sh
 sudo apt install ca-certificates curl gnupg
+keydir=$(mktemp -d)
+trap 'rm -rf "$keydir"' EXIT
 curl --fail --show-error --silent --location \
   https://stealth-factory.github.io/apt-repo/stealth-factory.asc \
-  --output /tmp/stealth-factory.asc
-gpg --show-keys --with-fingerprint /tmp/stealth-factory.asc
-gpg --show-keys --with-colons /tmp/stealth-factory.asc \
+  --output "$keydir/stealth-factory.asc"
+gpg --show-keys --with-fingerprint "$keydir/stealth-factory.asc"
+gpg --show-keys --with-colons "$keydir/stealth-factory.asc" \
   | awk -F: '$1 == "pub" { primary=1; next } primary && $1 == "fpr" { print $10; primary=0 }'
 # Compare the complete set of primary fingerprints with the announced set.
 # Reject a missing fingerprint and any extra primary key. Stop if they differ.
 sudo install -d -m 0755 /etc/apt/keyrings
-sudo install -m 0644 /tmp/stealth-factory.asc /etc/apt/keyrings/stealth-factory.asc
+sudo install -m 0644 "$keydir/stealth-factory.asc" /etc/apt/keyrings/stealth-factory.asc
 printf '%s\n' 'deb [arch=amd64 signed-by=/etc/apt/keyrings/stealth-factory.asc] https://stealth-factory.github.io/apt-repo stable main' \
   | sudo tee /etc/apt/sources.list.d/stealth-factory.list
 sudo apt update

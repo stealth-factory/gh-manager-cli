@@ -13,6 +13,7 @@ const directories: string[] = [];
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 const hasDpkg = spawnSync('dpkg-deb', ['--version'], { encoding: 'utf8' }).status === 0;
 const hasGcc = spawnSync('gcc', ['--version'], { encoding: 'utf8' }).status === 0;
+const isLinuxAmd64 = process.platform === 'linux' && process.arch === 'x64';
 
 function fixture() {
   const root = mkdtempSync(join(tmpdir(), 'gmc-deb-'));
@@ -123,7 +124,7 @@ describe('Debian package layout', () => {
     expect(checksum).toBe(checksumLine(deb, 'gh-manager-cli_1.2.3_amd64.deb'));
   });
 
-  it.skipIf(!hasDpkg || !hasGcc)('build() packages the executable that reports the manifest version', () => {
+  it.skipIf(!hasDpkg || !hasGcc || !isLinuxAmd64)('build() packages the executable that reports the manifest version', () => {
     const version = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8')).version as string;
     const root = mkdtempSync(join(tmpdir(), 'gmc-deb-build-'));
     directories.push(root);

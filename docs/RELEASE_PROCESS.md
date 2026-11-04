@@ -9,6 +9,7 @@ Releases come from [stealth-factory/gh-manager-cli](https://github.com/stealth-f
 | npm | `gh-manager-cli` | `npx gh-manager-cli@latest` |
 | GitHub Packages | `@stealth-factory/gh-manager-cli` | Requires GitHub registry configuration |
 | Homebrew | `stealth-factory/homebrew-tap` | `brew install stealth-factory/tap/gh-manager-cli` |
+| apt | `stealth-factory/apt-repo` | `sudo apt install gh-manager-cli` |
 | Standalone binaries | GitHub Releases | Platform-specific `gh-manager-cli-*` executable |
 
 The executable remains `gh-manager-cli`. Configuration, preferences, cache, and log paths retain the application name, regardless of npm scope.
@@ -35,9 +36,10 @@ The workflow checks the tag against `package.json` before npm publish and before
 
 1. Build Linux, macOS, and Windows binaries with the pinned `@yao-pkg/pkg` and `node22` targets.
 2. Publish `gh-manager-cli` to npmjs with OIDC trusted publishing (`id-token: write`), a token-free npm configuration, and npm 11.19.0. A version already on npm is skipped. No `NPM_TOKEN` or `NODE_AUTH_TOKEN` is set on this job. Configure the trusted publisher for `stealth-factory/gh-manager-cli`, workflow filename `release.yml`; see [npm Trusted Publishing](NPM_TRUSTED_PUBLISHING.md).
-3. Create a draft GitHub release from the changelog section for that version, upload all three binaries, verify the assets, then publish the release. Upload failures fail the job and leave the draft. An already published release is checked and not modified.
+3. Create a draft GitHub release from the changelog section for that version, build `gh-manager-cli_X.Y.Z_amd64.deb` and its `.sha256` (two spaces between the hash and the filename) from the Linux binary, upload those with the three binaries, verify the assets, then publish the release. Upload failures fail the job and leave the draft. An already published release is checked and not modified.
 4. Publish `@stealth-factory/gh-manager-cli` to GitHub Packages with `GITHUB_TOKEN`. The step temporarily changes the manifest name and registry, then restores both, including when publish fails.
 5. Download the unscoped tarball from the public npm registry, hash it, and update `Formula/gh-manager-cli.rb` in `stealth-factory/homebrew-tap`.
+6. After the GitHub release is published, `debian/notify-apt.js` sends `repository_dispatch` event `gh-manager-cli-release` to `stealth-factory/apt-repo` with `client_payload` `{repository, tag, commit}`. The token is `secrets.GH_TOKEN` or, if that is unset, `secrets.RELEASE_TOKEN`. No new secret name is introduced. If neither is set, the job fails and does not call apt-repo.
 
 Homebrew uses that published archive, not a local `npm pack` checksum. Downloads retry for up to six minutes while the registry propagates. If the archive is still missing, the job stops before it clones or edits the tap. A missing App token or a rejected formula push fails the job. A retry whose formula already matches succeeds without another commit.
 
@@ -48,7 +50,8 @@ The binary build, the GitHub release, the npm publish, and the tap update all ch
 - npmjs: an OIDC trusted publisher on `gh-manager-cli`. The workflow does not use `NPM_TOKEN`.
 - Org GitHub App: `vars.RELEASE_APP_CLIENT_ID` and `secrets.RELEASE_APP_PRIVATE_KEY`, minted with `actions/create-github-app-token` pinned to `64ab729a6294000f5aa4a4bc0b73d1f32bc45510` (v3.3.0). The release pull request token can write contents and pull requests in this repository. The tag token can write contents, so the tag push starts `release.yml`. The tap token can write contents only in `stealth-factory/homebrew-tap`. `altabella` has been removed from this repository, so these jobs do not fall back to `secrets.GH_TOKEN`.
 - GitHub release assets stay on `GITHUB_TOKEN`. The App has no Packages permission; GitHub Packages uses `GITHUB_TOKEN` as well.
-- Delete this repository's `GH_TOKEN` Actions secret if it is still present. Revoke the `altabella` PAT only after every other repository has moved.
+- apt dispatch uses `secrets.GH_TOKEN` or `secrets.RELEASE_TOKEN`, the same names gh-pr-manager uses. It does not invent a secret and it does not use `GITHUB_TOKEN`. If neither value is set, the job fails. The token needs Contents write on `stealth-factory/apt-repo`. Homebrew still does not fall back to `GH_TOKEN`.
+- Revoke the `altabella` PAT only after every other repository has moved.
 
 See [npm Package Name and Ownership](NPM_SCOPE_MIGRATION.md) for migration history and verification.
 
@@ -56,7 +59,7 @@ See [npm Package Name and Ownership](NPM_SCOPE_MIGRATION.md) for migration histo
 
 Actions → **release-pr** → **Run workflow** refreshes the release pull request without waiting for a merge. It still requires a releasable commit; it does not force a version.
 
-Actions → **Release Pipeline** → **Run workflow**, with the branch set to the tag, retries a tag that already exists. Upload failures leave a draft. An already published release with all three binaries is left unchanged. A published release that is missing an asset needs a new patch release. npm and the tap skip work that is already done.
+Actions → **Release Pipeline** → **Run workflow**, with the branch set to the tag, retries a tag that already exists. Upload failures leave a draft. An already published release with the three binaries and the Debian package pair is left unchanged. A published release that is missing an asset needs a new patch release. npm and the tap skip work that is already done. A retry dispatches apt-repo again; a missing token fails that job.
 
 Do not run `npm version` to force a release. For tap repair, use [HOMEBREW.md](HOMEBREW.md).
 

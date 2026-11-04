@@ -39,7 +39,7 @@ Maintained by [Stealth Factory](https://github.com/stealth-factory). The npm pac
 npx gh-manager-cli@latest
 ```
 
-The npm package contains the application directly. See [Installation](wiki/Installation.md) for global npm, Homebrew, and standalone binary options.
+The npm package contains the application directly. See [Installation](wiki/Installation.md) for apt, global npm, Homebrew, and standalone binary options.
 
 On first run, you'll be prompted to authenticate with GitHub (OAuth recommended). See [Token & Security](wiki/Token-and-Security.md).
 
@@ -81,6 +81,21 @@ See the [Features](wiki/Features.md) and [Usage & Controls](wiki/Usage.md) pages
 ```bash
 # Homebrew (macOS/Linux)
 brew tap stealth-factory/tap https://github.com/stealth-factory/homebrew-tap && brew install stealth-factory/tap/gh-manager-cli
+
+# apt (Linux amd64)
+sudo apt install ca-certificates curl gnupg
+curl --fail --show-error --silent --location \
+  https://stealth-factory.github.io/apt-repo/stealth-factory.asc \
+  --output /tmp/stealth-factory.asc
+gpg --show-keys --with-fingerprint /tmp/stealth-factory.asc
+# Compare the complete set of primary fingerprints with the set announced by
+# Stealth Factory. Do not install the key if they differ.
+sudo install -d -m 0755 /etc/apt/keyrings
+sudo install -m 0644 /tmp/stealth-factory.asc /etc/apt/keyrings/stealth-factory.asc
+printf '%s\n' 'deb [arch=amd64 signed-by=/etc/apt/keyrings/stealth-factory.asc] https://stealth-factory.github.io/apt-repo stable main' \
+  | sudo tee /etc/apt/sources.list.d/stealth-factory.list
+sudo apt update
+sudo apt install gh-manager-cli
 
 # npm global install
 npm install -g gh-manager-cli@latest

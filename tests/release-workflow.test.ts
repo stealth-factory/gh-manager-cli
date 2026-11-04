@@ -148,6 +148,7 @@ describe('deployment workflow (GMC-54)', () => {
       '${{ github.sha }}',
       '${{ github.sha }}',
       '${{ github.sha }}',
+      '${{ github.sha }}',
     ]);
   });
 
@@ -283,10 +284,22 @@ describe('npm OIDC release workflow (GMC-55)', () => {
 
 describe('org GitHub App token', () => {
   it('does not fall back to the removed altabella PAT or github.token', () => {
-    for (const file of [workflow, releasePr, tagRelease]) {
+    for (const file of [releasePr, tagRelease]) {
       const lines = file.split('\n').filter(line => line.includes('secrets.GH_TOKEN') || line.includes('secrets.RELEASE_TOKEN') || line.includes('github.token'));
       expect(lines).toEqual([]);
     }
+    // Homebrew, the release pull request, and tagging stay on the App token.
+    // Apt dispatch is the only use of the existing bot secret names, and it
+    // fails when neither is set rather than using github.token.
+    const beforeApt = workflow.split('\n  apt-repository:')[0];
+    expect(beforeApt).not.toContain('secrets.GH_TOKEN');
+    expect(beforeApt).not.toContain('secrets.RELEASE_TOKEN');
+    expect(workflow).not.toContain('github.token');
+    const lines = workflow.split('\n').filter(line => line.includes('secrets.GH_TOKEN') || line.includes('secrets.RELEASE_TOKEN'));
+    expect(lines).toEqual([
+      '          GH_TOKEN: ${{ secrets.GH_TOKEN || secrets.RELEASE_TOKEN }}',
+      '            echo "::error::APT repository dispatch requires secrets.GH_TOKEN or secrets.RELEASE_TOKEN"',
+    ]);
   });
 
   it('mints a contents token for the release pull request, the tag, and the tap', () => {
@@ -391,6 +404,47 @@ describe('org GitHub App token', () => {
     const calls = readFileSync(join(f.directory, 'git-calls.jsonl'), 'utf8');
     expect(calls).not.toContain('github-actions[bot]');
     expect(calls).toContain('x-access-token:app-token@github.com/stealth-factory/homebrew-tap.git');
+    expect(existsSync(join(f.directory, 'gh-calls.jsonl'))).toBe(false);
+  });
+
+  it('dispatches the apt repository with the existing bot token and the exact release', () => {
+    const aptJob = workflow.split('\n  apt-repository:')[1];
+    expect(aptJob).toContain('needs: create-release');
+    expect(aptJob).toContain('GH_TOKEN: ${{ secrets.GH_TOKEN || secrets.RELEASE_TOKEN }}');
+    expect(aptJob).not.toContain('secrets.APT_');
+    expect(aptJob).toContain('node debian/notify-apt.js');
+    const f = fixture({
+      GH_TOKEN: 'dispatch-token',
+      GITHUB_REPOSITORY: 'stealth-factory/gh-manager-cli',
+      GITHUB_REF_NAME: 'v1.54.0',
+      GITHUB_SHA: 'a'.repeat(40),
+    });
+    mkdirSync(join(f.directory, 'debian'));
+    for (const name of ['package.js', 'notify-apt.js']) {
+      copyFileSync(join(root, 'debian', name), join(f.directory, 'debian', name));
+    }
+    const result = f.run('Notify the shared APT repository of this published release', 'apt-repository');
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    const sent = JSON.parse(readFileSync(join(f.directory, 'gh-api-body.json'), 'utf8')) as {
+      event_type: string;
+      client_payload: { repository: string; tag: string; commit: string };
+    };
+    expect(sent).toEqual({
+      event_type: 'gh-manager-cli-release',
+      client_payload: {
+        repository: 'stealth-factory/gh-manager-cli',
+        tag: 'v1.54.0',
+        commit: 'a'.repeat(40),
+      },
+    });
+    expect(JSON.stringify(sent)).not.toContain('dispatch-token');
+  });
+
+  it('fails the apt dispatch when neither existing bot token is set', () => {
+    const f = fixture({ GH_TOKEN: '' });
+    const result = f.run('Notify the shared APT repository of this published release', 'apt-repository');
+    expect(result.status).toBe(1);
+    expect(result.stdout).toContain('::error::APT repository dispatch requires secrets.GH_TOKEN or secrets.RELEASE_TOKEN');
     expect(existsSync(join(f.directory, 'gh-calls.jsonl'))).toBe(false);
   });
 });

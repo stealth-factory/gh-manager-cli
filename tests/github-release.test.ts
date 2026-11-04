@@ -9,6 +9,8 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const workflow = readFileSync(join(root, '.github/workflows/release.yml'), 'utf8');
 const directories: string[] = [];
 const names = ['gh-manager-cli-linux-x64', 'gh-manager-cli-macos-x64', 'gh-manager-cli-windows-x64.exe'];
+const debNames = ['gh-manager-cli_1.53.3_amd64.deb', 'gh-manager-cli_1.53.3_amd64.deb.sha256'];
+const assets = [...names, ...debNames];
 function block(name: string) {
   const start = workflow.indexOf(`      - name: ${name}\n`);
   if (start < 0) throw new Error(`Missing step: ${name}`);
@@ -32,6 +34,8 @@ function fixture(overrides: Record<string, string> = {}) {
     mkdirSync(directory, { recursive: true });
     writeFileSync(join(directory, name), 'binary');
   }
+  mkdirSync(join(cwd, 'deb'));
+  for (const name of debNames) writeFileSync(join(cwd, 'deb', name), 'binary');
   writeFileSync(join(cwd, 'bin', 'gh'), `#!/usr/bin/env node
 const fs = require('node:fs');
 const args = process.argv.slice(2);
@@ -48,7 +52,7 @@ if (args[1] === 'view') {
   if (process.env.OMIT_ASSET === '1') state.assets.pop();
   fs.writeFileSync('release.json', JSON.stringify(state));
 } else if (args[1] === 'edit') {
-  if (state.assets.length !== 3) process.exit(8);
+  if (state.assets.length !== 5) process.exit(8);
   state.isDraft = false;
   fs.writeFileSync('release.json', JSON.stringify(state));
 } else process.exit(99);
@@ -73,7 +77,7 @@ describe('immutable GitHub release distribution (GMC-57)', () => {
     expect(f.run('Upload binaries to release').status).toBe(0);
     expect(f.state().isDraft).toBe(true);
     expect(f.run('Publish GitHub Release').status).toBe(0);
-    expect(f.state()).toEqual({ isDraft: false, assets: names.map(name => ({ name, size: 6 })) });
+    expect(f.state()).toEqual({ isDraft: false, assets: assets.map(name => ({ name, size: 6 })) });
   });
 
   it('fails on upload errors and leaves the release as a draft', () => {

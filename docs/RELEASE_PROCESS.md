@@ -19,7 +19,7 @@ The executable remains `gh-manager-cli`. Configuration, preferences, cache, and 
 
 `feat:` is a minor bump. `fix:` and `perf:` are patch bumps. A breaking change is a major bump, whether it is marked with `!` in the subject or with a `BREAKING CHANGE:` / `BREAKING-CHANGE:` footer. `revert:` is included. Documentation and maintenance commits do not open a release by themselves; they are listed in the changelog of the next real release. git-cliff would otherwise bump the patch for any commit, so the workflow ignores a range that has none of those releasable commits.
 
-When there is something to release, the workflow prepends a changelog section, bumps `package.json`, and opens or updates one pull request from the `release` branch. That branch is force-pushed. Do not commit to it. Edit the changelog on `main` if a line reads badly. Merging the pull request is the release. Until then nothing is tagged or published.
+When there is something to release, the workflow prepends a changelog section, bumps `package.json`, and opens or updates one pull request from the `release` branch. That branch is force-pushed. Do not commit to it. The changelog text comes from the conventional commits on `main`. To change a line, change that commit message; do not edit `CHANGELOG.md` by hand. Merging the pull request is the release. Until then nothing is tagged or published.
 
 Do not manually bump the version or edit `CHANGELOG.md`. The historical sections were written by semantic-release; new sections are prepended by git-cliff and are not a rewrite of that history.
 

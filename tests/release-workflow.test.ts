@@ -301,6 +301,8 @@ describe('org GitHub App token', () => {
     expect(releasePr).toContain("if: steps.app.outputs.token != ''");
     expect(releasePr).toContain('^(feat|fix|perf|revert)');
     expect(releasePr).toContain('BREAKING[- ]CHANGE:');
+    expect(releasePr).toContain('conventional commits on main');
+    expect(releasePr).not.toContain('edit the changelog');
 
     expect(tagRelease).toContain('branches: [main]');
     expect(tagRelease).toContain('permission-contents: write');

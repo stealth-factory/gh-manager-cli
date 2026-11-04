@@ -24,7 +24,7 @@ New trusted publisher connections must complete their first successful publish w
 
 - The npmjs job requests `id-token: write` on a GitHub-hosted Ubuntu runner.
 - Node 22 and pinned npm 11.19.0 support trusted publishing. The tag job runs `npm publish --access public --provenance`.
-- Keep `publishConfig.registry` exactly `https://registry.npmjs.org/`, including the trailing slash: the installed npm plugin uses an exact comparison to select OIDC.
+- Keep `publishConfig.registry` as `https://registry.npmjs.org/`, including the trailing slash. `tests/npm-migration.test.ts` pins that literal, and the npm job writes the same registry into its token-free npmrc.
 - A dedicated, token-free npm configuration replaces setup-node's authentication placeholder before dependencies are installed and releases run. The job does not reference `NPM_TOKEN` or `NODE_AUTH_TOKEN` secrets.
 - Public packages published from this public repository through OIDC receive npm's automatic provenance attestations.
 

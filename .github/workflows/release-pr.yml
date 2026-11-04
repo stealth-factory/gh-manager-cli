@@ -205,8 +205,8 @@ jobs:
             "the Homebrew tap is updated from the public npm tarball." \
             "" \
             "This pull request rewrites itself on every merge to main. Do not" \
-            "commit to it — the branch is force-pushed — and edit the changelog" \
-            "on main instead if something reads badly." \
+            "commit to it. The branch is force-pushed. The changelog text" \
+            "comes from the conventional commits on main." \
             "" \
             "---")
           notes=$(awk '/^## \[/{n++} n==1' CHANGELOG.md | head -60)

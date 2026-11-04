@@ -18,8 +18,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read # Writes use the release App token, not GITHUB_TOKEN.
 
 # One at a time. Two pushes in quick succession would otherwise race to
 # force-push the same branch, and the loser would leave the pull request

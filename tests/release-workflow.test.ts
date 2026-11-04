@@ -292,6 +292,9 @@ describe('org GitHub App token', () => {
     expect(workflow).not.toContain("startsWith(github.event.head_commit.message, 'chore(release):')");
 
     expect(releasePr).toContain('branches: [main]');
+    expect(releasePr).toMatch(/\npermissions:\n {2}contents: read\b/);
+    expect(releasePr).not.toMatch(/\n {2}contents: write\n/);
+    expect(releasePr).not.toMatch(/\n {2}pull-requests: write\n/);
     expect(releasePr).toContain('permission-contents: write');
     expect(releasePr).toContain('permission-pull-requests: write');
     expect(releasePr).not.toContain('permission-issues');
@@ -305,6 +308,8 @@ describe('org GitHub App token', () => {
     expect(releasePr).not.toContain('edit the changelog');
 
     expect(tagRelease).toContain('branches: [main]');
+    expect(tagRelease).toMatch(/\npermissions:\n {2}contents: read\b/);
+    expect(tagRelease).not.toMatch(/\n {2}contents: write\n/);
     expect(tagRelease).toContain('permission-contents: write');
     expect(tagRelease).not.toContain('permission-pull-requests');
     expect(tagRelease).not.toMatch(/\bnpm publish\b/);
@@ -378,6 +383,7 @@ describe('org GitHub App token', () => {
 
 describe('release eligibility', () => {
   const script = runBlock('What the next version would be', 'prepare', releasePr);
+  const hasGitCliff = spawnSync('git-cliff', ['--version'], { encoding: 'utf8' }).status === 0;
 
   function decide(messages: string[][]): string {
     const directory = mkdtempSync(join(tmpdir(), 'gh-release-eligibility-'));
@@ -421,19 +427,19 @@ describe('release eligibility', () => {
     expect(decide([['docs: clarify the footer']])).toContain('release=no');
   });
 
-  it('releases a breaking-change footer that has no bang in the subject', () => {
+  it.skipIf(!hasGitCliff)('releases a breaking-change footer that has no bang in the subject', () => {
     const text = decide([['refactor: rename a helper', 'BREAKING CHANGE: callers must pass the new argument']]);
     expect(text).toContain('release=yes');
     expect(text).toContain('next=2.0.0');
   });
 
-  it('releases the hyphenated breaking-change footer', () => {
+  it.skipIf(!hasGitCliff)('releases the hyphenated breaking-change footer', () => {
     const text = decide([['build: switch the packager', 'BREAKING-CHANGE: the archive layout changed']]);
     expect(text).toContain('release=yes');
     expect(text).toContain('next=2.0.0');
   });
 
-  it('still releases an ordinary fix', () => {
+  it.skipIf(!hasGitCliff)('still releases an ordinary fix', () => {
     const text = decide([['fix(cli): correct the range']]);
     expect(text).toContain('release=yes');
     expect(text).toContain('next=1.53.4');

@@ -433,7 +433,7 @@ describe('release tagging', () => {
   it('tags the merge commit of the release pull request', () => {
     const { f, result } = tagRun([{
       merged_at: '2026-11-04T00:00:00Z',
-      head: { ref: 'release' },
+      head: { ref: 'release', repo: { full_name: 'stealth-factory/gh-manager-cli' } },
       base: { ref: 'main' },
       merge_commit_sha: sha,
     }]);
@@ -442,6 +442,18 @@ describe('release tagging', () => {
     expect(calls).toContain('["tag","-a","v1.54.0","-m","v1.54.0"]');
     expect(calls).toContain('["push","origin","v1.54.0"]');
     expect(readFileSync(join(f.directory, 'github-output'), 'utf8')).toContain('tagged=yes');
+  });
+
+  it('does not tag a fork branch named release', () => {
+    const { f, result } = tagRun([{
+      merged_at: '2026-11-04T00:00:00Z',
+      head: { ref: 'release', repo: { full_name: 'someone/gh-manager-cli' } },
+      base: { ref: 'main' },
+      merge_commit_sha: sha,
+    }]);
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    expect(existsSync(join(f.directory, 'git-calls.jsonl'))).toBe(false);
+    expect(readFileSync(join(f.directory, 'github-output'), 'utf8')).toContain('tagged=no');
   });
 
   it('does not tag a push from another pull request', () => {

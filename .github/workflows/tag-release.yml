@@ -68,7 +68,8 @@ jobs:
             exit 1
           fi
           # The push to main is not enough. Publication starts only from the
-          # squash or merge commit of the release pull request.
+          # squash or merge commit of this repository's release pull request.
+          # A fork can use the same branch name.
           sha="${GITHUB_SHA}"
           if [ -z "$sha" ]; then
             echo "::error::tagging a release requires the pushed commit"
@@ -76,7 +77,7 @@ jobs:
           fi
           match=$(gh api -H "Accept: application/vnd.github+json" \
             "repos/${GITHUB_REPOSITORY}/commits/${sha}/pulls" \
-            | jq -r --arg sha "$sha" '[.[] | select(.merged_at != null and .head.ref == "release" and .base.ref == "main" and .merge_commit_sha == $sha)] | length')
+            | jq -r --arg sha "$sha" --arg repo "$GITHUB_REPOSITORY" '[.[] | select(.merged_at != null and .head.ref == "release" and .head.repo.full_name == $repo and .base.ref == "main" and .merge_commit_sha == $sha)] | length')
           if [ "$match" = "0" ]; then
             echo "not a merged release pull request; nothing to tag"
             echo "tagged=no" >> "$GITHUB_OUTPUT"

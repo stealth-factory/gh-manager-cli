@@ -1,0 +1,78 @@
+# Tags the release once its pull request is merged.
+#
+# release-pr.yml prepares; this fires when that preparation lands on main
+# and turns it into a tag. The tag push starts release.yml. Nothing here
+# publishes.
+#
+# It fires on any push to main and does nothing unless the version in
+# package.json has no tag yet, so re-running it is harmless.
+name: tag-release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tag-release
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require the release app
+        if: vars.RELEASE_APP_CLIENT_ID == ''
+        run: |
+          echo "::error::Tagging a release requires vars.RELEASE_APP_CLIENT_ID and secrets.RELEASE_APP_PRIVATE_KEY"
+          exit 1
+
+      # The tag push has to start release.yml. The App token does; the
+      # workflow's own token does not.
+      - id: app
+        if: vars.RELEASE_APP_CLIENT_ID != ''
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
+
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          token: ${{ steps.app.outputs.token }}
+
+      - name: Git identity
+        if: steps.app.outputs.token != ''
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          SLUG: ${{ steps.app.outputs.app-slug }}
+        run: |
+          id=$(gh api "/users/${SLUG}[bot]" --jq .id)
+          git config user.name "${SLUG}[bot]"
+          git config user.email "${id}+${SLUG}[bot]@users.noreply.github.com"
+
+      - name: Tag it, if this version has not been tagged
+        id: tag
+        run: |
+          set -euo pipefail
+          version=$(node -p "require('./package.json').version")
+          if [ -z "$version" ]; then
+            echo "::error::no version in package.json"
+            exit 1
+          fi
+          tag="v${version}"
+          if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
+            echo "${tag} exists; nothing to do"
+            echo "tagged=no" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Annotated, so the tag carries who made it and when.
+          git tag -a "$tag" -m "$tag"
+          git push origin "$tag"
+          echo "pushed ${tag}"
+          echo "tagged=yes" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"

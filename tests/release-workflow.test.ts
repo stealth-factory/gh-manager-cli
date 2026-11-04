@@ -8,29 +8,37 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const workflow = readFileSync(join(root, '.github/workflows/release.yml'), 'utf8');
+const releasePr = readFileSync(join(root, '.github/workflows/release-pr.yml'), 'utf8');
+const tagRelease = readFileSync(join(root, '.github/workflows/tag-release.yml'), 'utf8');
 const directories: string[] = [];
 
 // Execute the actual workflow's shell blocks offline. Their env expressions
 // are outside the run blocks; the fixture supplies those values explicitly.
 // `job` is required when two jobs share a step name, such as Git identity.
-function jobBody(job: string): string {
+function jobBody(job: string, source = workflow): string {
   const header = `\n  ${job}:\n`;
-  const start = workflow.indexOf(header);
+  const start = source.indexOf(header);
   if (start === -1) throw new Error(`Missing workflow job: ${job}`);
   const bodyStart = start + header.length;
-  const next = workflow.slice(bodyStart).search(/\n  [a-z0-9-]+:\n/);
-  return next === -1 ? workflow.slice(bodyStart) : workflow.slice(bodyStart, bodyStart + next);
+  const next = source.slice(bodyStart).search(/\n  [a-z0-9-]+:\n/);
+  return next === -1 ? source.slice(bodyStart) : source.slice(bodyStart, bodyStart + next);
 }
 
-function runBlock(name: string, job?: string) {
-  const source = job ? jobBody(job) : workflow;
-  const start = source.indexOf(`      - name: ${name}\n`);
+function runBlock(name: string, job?: string, source = workflow) {
+  const text = job ? jobBody(job, source) : source;
+  const start = text.indexOf(`      - name: ${name}\n`);
   if (start === -1) throw new Error(`Missing workflow step: ${job ? `${job} / ` : ''}${name}`);
-  const next = source.indexOf('      - name:', start + 1);
-  const step = source.slice(start, next === -1 ? undefined : next);
+  const next = text.indexOf('      - name:', start + 1);
+  const step = text.slice(start, next === -1 ? undefined : next);
   const block = step.split('        run: |\n')[1];
   if (!block) throw new Error(`Missing run block: ${job ? `${job} / ` : ''}${name}`);
-  return block.split('\n').map(line => line.startsWith('          ') ? line.slice(10) : line).join('\n');
+  const script: string[] = [];
+  for (const line of block.split('\n')) {
+    if (line.startsWith('          ')) script.push(line.slice(10));
+    else if (!line.trim()) script.push('');
+    else break;
+  }
+  return script.join('\n');
 }
 
 function fixture(overrides: Record<string, string> = {}) {
@@ -113,7 +121,7 @@ else if (args[0] === 'push' && process.env.MOCK_PUSH_FAILURE === '1') process.ex
   return {
     directory,
     original,
-    run: (name: string, job?: string) => spawnSync('bash', ['-e', '-o', 'pipefail', '-c', runBlock(name, job)], { cwd: directory, env, encoding: 'utf8' }),
+    run: (name: string, job?: string, source?: string) => spawnSync('bash', ['-e', '-o', 'pipefail', '-c', runBlock(name, job, source)], { cwd: directory, env, encoding: 'utf8' }),
   };
 }
 
@@ -124,7 +132,12 @@ afterEach(() => {
 describe('deployment workflow (GMC-54)', () => {
   it('checks out the same triggering commit for binaries, release metadata, and publication', () => {
     const refs = [...workflow.matchAll(/^          ref: (.+)$/gm)].map(match => match[1]);
-    expect(refs).toEqual(['${{ github.sha }}', '${{ github.sha }}']);
+    expect(refs).toEqual([
+      '${{ github.sha }}',
+      '${{ github.sha }}',
+      '${{ github.sha }}',
+      '${{ github.sha }}',
+    ]);
   });
 
   it.each(['0', '1'])('publishes to the new GitHub scope and restores npmjs config even on failure=%s', failure => {
@@ -196,14 +209,40 @@ describe('npm OIDC release workflow (GMC-55)', () => {
     const npmjsJob = workflow.split('\n  build:')[0];
     expect(npmjsJob).toContain('      id-token: write');
     expect(npmjsJob).toContain('          package-manager-cache: false');
+    expect(npmjsJob).toContain("if: startsWith(github.ref, 'refs/tags/v')");
+    expect(npmjsJob).toContain('npm publish --access public --provenance');
     expect(npmjsJob).not.toContain('secrets.NPM_TOKEN');
     expect(npmjsJob).not.toMatch(/^\s+(NPM_TOKEN|NODE_AUTH_TOKEN):/m);
-    // Release commits use the org App token. altabella no longer has access here.
-    expect(npmjsJob).toContain('uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0');
-    expect(npmjsJob).toContain('GH_TOKEN: ${{ steps.app.outputs.token }}');
     expect(npmjsJob).not.toContain('secrets.GH_TOKEN');
     expect(npmjsJob).not.toContain('github.token');
+    expect(npmjsJob).not.toContain('create-github-app-token');
+    // GitHub Packages stays on the job token. The release pull request uses the App.
     expect(workflow).toContain('NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}');
+    expect(releasePr).toContain('GH_TOKEN: ${{ steps.app.outputs.token }}');
+  });
+
+  it('publishes the unscoped package when the tag matches the manifest', () => {
+    const f = fixture({ GITHUB_REF_NAME: 'v1.54.0' });
+    expect(f.run('Publish to npm').status).toBe(0);
+    const published = JSON.parse(readFileSync(join(f.directory, 'published-package.json'), 'utf8')) as { name: string };
+    expect(published.name).toBe('gh-manager-cli');
+    const calls = readFileSync(join(f.directory, 'npm-calls.jsonl'), 'utf8').trim().split('\n').map(line => JSON.parse(line) as string[]);
+    expect(calls[0]?.[0]).toBe('view');
+    expect(calls[1]).toEqual(['publish', '--access', 'public', '--provenance']);
+  });
+
+  it('skips npmjs when that version is already published', () => {
+    const f = fixture({ GITHUB_REF_NAME: 'v1.54.0', MOCK_PACKAGE_EXISTS: '1' });
+    expect(f.run('Publish to npm').status).toBe(0);
+    expect(existsSync(join(f.directory, 'published-package.json'))).toBe(false);
+  });
+
+  it('refuses to publish when the tag and the manifest disagree', () => {
+    const f = fixture({ GITHUB_REF_NAME: 'v9.9.9' });
+    const result = f.run('Publish to npm');
+    expect(result.status).toBe(1);
+    expect(result.stdout).toContain('::error::tag v9.9.9 but package.json says 1.54.0');
+    expect(existsSync(join(f.directory, 'published-package.json'))).toBe(false);
   });
 
   it('replaces setup-node authentication with a token-free config before installing a compatible npm', () => {
@@ -233,28 +272,50 @@ describe('npm OIDC release workflow (GMC-55)', () => {
 
 describe('org GitHub App token', () => {
   it('does not fall back to the removed altabella PAT or github.token', () => {
-    const lines = workflow.split('\n').filter(line => line.includes('secrets.GH_TOKEN') || line.includes('secrets.RELEASE_TOKEN') || line.includes('github.token'));
-    expect(lines).toEqual([]);
+    for (const file of [workflow, releasePr, tagRelease]) {
+      const lines = file.split('\n').filter(line => line.includes('secrets.GH_TOKEN') || line.includes('secrets.RELEASE_TOKEN') || line.includes('github.token'));
+      expect(lines).toEqual([]);
+    }
   });
 
-  it('mints a contents token for this repo and a separate contents token for the tap', () => {
-    const pins = workflow.match(/uses: actions\/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3\.3\.0/g);
-    expect(pins).toHaveLength(2);
+  it('mints a contents token for the release pull request, the tag, and the tap', () => {
+    const pin = 'uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0';
+    expect(workflow.split(pin)).toHaveLength(2);
+    expect(releasePr.split(pin)).toHaveLength(2);
+    expect(tagRelease.split(pin)).toHaveLength(2);
     expect(workflow).not.toContain('permission-pull-requests');
     expect(workflow).not.toContain('permission-issues');
     expect(workflow).not.toContain('permission-workflows');
     expect(workflow).not.toContain('permission-actions');
     expect(workflow).not.toContain('permission-deployments');
+    expect(workflow).not.toMatch(/branches:\s*\[main\]/);
+    expect(workflow).not.toContain("startsWith(github.event.head_commit.message, 'chore(release):')");
 
-    const semanticJob = workflow.split('\n  build:')[0];
-    expect(semanticJob).not.toContain('repositories:');
-    expect(semanticJob).not.toContain('owner:');
-    expect(semanticJob).toContain('permission-contents: write');
+    expect(releasePr).toContain('branches: [main]');
+    expect(releasePr).toContain('permission-contents: write');
+    expect(releasePr).toContain('permission-pull-requests: write');
+    expect(releasePr).not.toContain('permission-issues');
+    expect(releasePr).not.toContain('permission-workflows');
+    expect(releasePr).not.toContain('permission-actions');
+    expect(releasePr).not.toMatch(/\bnpm publish\b/);
+    expect(releasePr).toContain("if: steps.app.outputs.token != ''");
+    expect(releasePr).toContain('^(feat|fix|perf|revert)');
+
+    expect(tagRelease).toContain('branches: [main]');
+    expect(tagRelease).toContain('permission-contents: write');
+    expect(tagRelease).not.toContain('permission-pull-requests');
+    expect(tagRelease).not.toMatch(/\bnpm publish\b/);
+    expect(tagRelease).toContain('git push origin "$tag"');
+
+    const npmJob = workflow.split('\n  build:')[0];
+    expect(npmJob).not.toContain('repositories:');
+    expect(npmJob).not.toContain('owner:');
 
     const releaseJob = workflow.split('\n  create-release:')[1].split('\n  publish-extras:')[0];
     expect(releaseJob).not.toContain('secrets.GH_TOKEN');
     expect(releaseJob).not.toContain('create-github-app-token');
     expect(releaseJob).toContain('GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}');
+    expect(releaseJob).toContain("if: startsWith(github.ref, 'refs/tags/v')");
 
     const tapJob = workflow.split('\n  publish-extras:')[1];
     expect(tapJob).toContain('owner: stealth-factory');
@@ -262,13 +323,13 @@ describe('org GitHub App token', () => {
     expect(tapJob).toContain('GITHUB_TOKEN: ${{ steps.app.outputs.token }}');
     expect(tapJob).not.toContain('github-actions[bot]');
     expect(tapJob).toContain('git commit -m "chore: update gh-manager-cli to ${VERSION}"');
-    expect(semanticJob).toContain("if: steps.app.outputs.token != ''");
     expect(tapJob).toContain("if: steps.app.outputs.token != ''");
+    expect(tapJob).toContain("if: startsWith(github.ref, 'refs/tags/v')");
   });
 
-  it('sets the semantic-release author from the App bot lookup', () => {
+  it('sets the release pull request author from the App bot lookup', () => {
     const f = fixture({ SLUG: 'stealth-factory-ci', MOCK_BOT_ID: '4242' });
-    const result = f.run('Git identity', 'semantic-release');
+    const result = f.run('Git identity', 'prepare', releasePr);
     expect(result.status).toBe(0);
     expect(result.stderr).toBe('');
     const ghCalls = readFileSync(join(f.directory, 'gh-calls.jsonl'), 'utf8');
@@ -298,7 +359,7 @@ describe('org GitHub App token', () => {
 
   it('stops the release identity when the App bot lookup fails', () => {
     const f = fixture({ SLUG: 'stealth-factory-ci', MOCK_GH_FAILURE: '1' });
-    expect(f.run('Git identity', 'semantic-release').status).not.toBe(0);
+    expect(f.run('Git identity', 'prepare', releasePr).status).not.toBe(0);
     expect(existsSync(join(f.directory, 'github-env'))).toBe(false);
   });
 

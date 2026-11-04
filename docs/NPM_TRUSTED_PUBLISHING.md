@@ -1,6 +1,6 @@
 # npm Trusted Publishing
 
-The npmjs release job in `.github/workflows/release.yml` publishes the application directly as `gh-manager-cli` using GitHub Actions OIDC. It does not use a stored `NPM_TOKEN`. Release commits and Homebrew tap pushes mint the org GitHub App token (`RELEASE_APP_CLIENT_ID` / `RELEASE_APP_PRIVATE_KEY`). `altabella` has been removed from this repository, so those steps do not use `secrets.GH_TOKEN`. The separate GitHub Packages job uses `GITHUB_TOKEN`.
+The npmjs release job in `.github/workflows/release.yml` publishes the application directly as `gh-manager-cli` using GitHub Actions OIDC. It runs only for a `v*` tag. It does not use a stored `NPM_TOKEN`. The release pull request, the tag push, and the Homebrew tap push mint the org GitHub App token (`RELEASE_APP_CLIENT_ID` / `RELEASE_APP_PRIVATE_KEY`). `altabella` has been removed from this repository, so those steps do not use `secrets.GH_TOKEN`. The separate GitHub Packages job uses `GITHUB_TOKEN`.
 
 ## Configure the npm Package
 
@@ -23,7 +23,7 @@ New trusted publisher connections must complete their first successful publish w
 ## Workflow Behaviour
 
 - The npmjs job requests `id-token: write` on a GitHub-hosted Ubuntu runner.
-- Node 22 and pinned npm 11.19.0 support trusted publishing. Semantic-release's npm plugin supports OIDC.
+- Node 22 and pinned npm 11.19.0 support trusted publishing. The tag job runs `npm publish --access public --provenance`.
 - Keep `publishConfig.registry` exactly `https://registry.npmjs.org/`, including the trailing slash: the installed npm plugin uses an exact comparison to select OIDC.
 - A dedicated, token-free npm configuration replaces setup-node's authentication placeholder before dependencies are installed and releases run. The job does not reference `NPM_TOKEN` or `NODE_AUTH_TOKEN` secrets.
 - Public packages published from this public repository through OIDC receive npm's automatic provenance attestations.
@@ -51,4 +51,4 @@ npm trust list --json
 
 npm requires account 2FA for this operation. Complete its interactive authentication locally, or inspect the package's settings on npmjs.com.
 
-Do not manually bump versions or edit `CHANGELOG.md`. Semantic-release calculates the next version from conventional commits. See [Release Process](RELEASE_PROCESS.md).
+Do not manually bump versions or edit `CHANGELOG.md`. The release pull request calculates the next version from conventional commits. See [Release Process](RELEASE_PROCESS.md).

@@ -73,14 +73,11 @@
     "react": "^19.3.0"
   },
   "devDependencies": {
-    "@semantic-release/changelog": "^7.0.0",
-    "@semantic-release/git": "^11.0.1",
     "@types/node": "^26.6.5",
     "@types/react": "^19.3.0",
     "@vitest/coverage-v8": "^4.1.8",
     "@yao-pkg/pkg": "^6.23.0",
     "ink-testing-library": "^4.0.0",
-    "semantic-release": "^25.0.9",
     "tsup": "^8.5.1",
     "typescript": "^7.0.2",
     "vite": "^8.3.4",
@@ -94,27 +91,6 @@
     "url": "https://github.com/stealth-factory/gh-manager-cli/issues"
   },
   "homepage": "https://gh-manager-cli.dev",
-  "release": {
-    "branches": [
-      "main"
-    ],
-    "plugins": [
-      "@semantic-release/commit-analyzer",
-      "@semantic-release/release-notes-generator",
-      "@semantic-release/changelog",
-      "@semantic-release/npm",
-      [
-        "@semantic-release/git",
-        {
-          "assets": [
-            "CHANGELOG.md",
-            "package.json"
-          ],
-          "message": "chore(release): ${nextRelease.version}\n\n${nextRelease.notes}"
-        }
-      ]
-    ]
-  },
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org/"

@@ -14,7 +14,7 @@ The explicit repository URL lets Homebrew use the `stealth-factory/tap` alias. F
 
 ## Release Automation
 
-After npm publication and the binary release, `.github/workflows/release.yml` updates `Formula/gh-manager-cli.rb` in `stealth-factory/homebrew-tap`.
+After the tag's npm publication and binary release, `.github/workflows/release.yml` updates `Formula/gh-manager-cli.rb` in `stealth-factory/homebrew-tap`. A merge to `main` does not update the tap.
 
 - Download the published `gh-manager-cli` tarball and calculate its SHA256. Downloads retry for up to six minutes to allow npm propagation.
 - Replace either the previous unscoped URL or an existing scoped URL with the unscoped tarball URL.

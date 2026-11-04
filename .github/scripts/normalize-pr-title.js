@@ -6,21 +6,21 @@
  */
 
 // Valid conventional commit types
-const VALID_TYPES = ['feat', 'fix', 'docs', 'style', 'refactor', 'perf', 'test', 'build', 'ci', 'chore', 'revert'];
+const VALID_TYPES = ['feat', 'fix', 'docs', 'style', 'refactor', 'perf', 'test', 'build', 'ci', 'chore', 'revert', 'release'];
 
 // Regex patterns
 const patterns = {
   // Strict validation - lowercase types only
-  validFormat: /^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\(.+\))?!?: .+$/,
+  validFormat: /^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert|release)(\(.+\))?!?: .+$/,
   
   // Case-insensitive validation
-  validFormatInsensitive: /^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\(.+\))?!?: .+$/i,
+  validFormatInsensitive: /^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert|release)(\(.+\))?!?: .+$/i,
   
   // Extract type, scope, and breaking change (case-insensitive)
-  typeExtraction: /^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\((.+?)\))?(!?):\s*(.+)$/i,
+  typeExtraction: /^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert|release)(\((.+?)\))?(!?):\s*(.+)$/i,
   
   // Remove existing type prefix (case-insensitive)
-  removePrefix: /^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\(.+?\))?!?:\s*/i
+  removePrefix: /^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert|release)(\(.+?\))?!?:\s*/i
 };
 
 /**
@@ -62,7 +62,7 @@ function normalizeCaseOnly(title) {
  * Extract and analyze commit messages
  */
 function analyzeCommits(commitMessages) {
-  const typeRegex = /^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\((.+?)\))?(!?):/i;
+  const typeRegex = /^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert|release)(\((.+?)\))?(!?):/i;
   
   const results = commitMessages
     .map(msg => {
@@ -248,7 +248,7 @@ function ensureValidFormat(title) {
   }
   
   // Try to extract a valid type from the title
-  const typeMatch = title.match(/^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)/i);
+  const typeMatch = title.match(/^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert|release)/i);
   if (typeMatch) {
     // Normalize the existing type
     return title.replace(/^[^:]+/, typeMatch[0].toLowerCase());
@@ -264,7 +264,7 @@ function ensureValidFormat(title) {
  */
 function finalNormalize(title) {
   // Normalize the title: lowercase type/scope but preserve case in description (sentence case)
-  return title.replace(/^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\((.+?)\))?(!?): (.+)$/i, 
+  return title.replace(/^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert|release)(\((.+?)\))?(!?): (.+)$/i, 
     (match, type, scopeGroup, scope, breaking, description) => {
       const normalizedType = type.toLowerCase();
       const normalizedScope = scope ? scope.toLowerCase() : '';

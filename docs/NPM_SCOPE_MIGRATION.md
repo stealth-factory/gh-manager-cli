@@ -20,7 +20,7 @@ Existing `npx gh-manager-cli` and global unscoped installations keep their packa
 
 The package already exists, so a bootstrap publish is unnecessary. Configure its trusted publisher for `stealth-factory/gh-manager-cli`, workflow `release.yml`, no environment, and direct publishing. See [npm Trusted Publishing](NPM_TRUSTED_PUBLISHING.md).
 
-Semantic-release uses existing tags and conventional commits to calculate the next release. Do not overwrite an existing npm version, manually bump `package.json`, or edit the generated `CHANGELOG.md`.
+The release pull request uses existing tags and conventional commits to calculate the next release. Do not overwrite an existing npm version, manually bump `package.json`, or edit the generated `CHANGELOG.md`. Publication happens from the tag, not from the merge that prepared it.
 
 After the workflow succeeds:
 

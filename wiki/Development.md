@@ -24,38 +24,31 @@ pnpm test           # run the test suite (Vitest)
 
 ## Release Process
 
-The project uses an automated, two-phase release workflow.
+Releases are pooled. A merge to `main` does not publish.
 
-### Phase 1: Version Creation
+### Release pull request
 
-Triggers on feature/fix commits to `main`. Uses semantic-release to analyse commit messages:
+`.github/workflows/release-pr.yml` reads conventional commits since the last tag:
 
 - `feat:` → minor bump
-- `fix:` → patch bump
-- `BREAKING CHANGE:` → major bump
+- `fix:` and `perf:` → patch bump
+- a breaking marker → major bump
 
-Actions:
+When one of those is present, it updates a standing pull request: `package.json`, a prepended changelog section, and no tag. Documentation and maintenance commits wait for the next real change.
 
-1. Analyse commits since the last release.
-2. Calculate the new version.
-3. Update `package.json` and `CHANGELOG.md`.
-4. Create a git tag.
-5. Publish `gh-manager-cli` publicly on npm using OIDC.
-6. Commit changes as `chore(release): X.Y.Z`.
+### Tag and publication
 
-### Phase 2: Binary Building & Distribution
+Merging that pull request tags `vX.Y.Z`. `.github/workflows/release.yml` then:
 
-Triggers on `chore(release):` commits. Actions:
-
-1. Build binaries for Linux, macOS, and Windows.
-2. Create a GitHub release with the changelog.
-3. Upload binaries to the release.
-4. Publish `@stealth-factory/gh-manager-cli` to GitHub Packages.
-5. Update the formula in `stealth-factory/homebrew-tap` from the published unscoped npm tarball.
+1. Builds binaries for Linux, macOS, and Windows.
+2. Publishes `gh-manager-cli` publicly on npm using OIDC.
+3. Creates a draft GitHub release, uploads the three binaries, and publishes it only after they are all present.
+4. Publishes `@stealth-factory/gh-manager-cli` to GitHub Packages.
+5. Updates the formula in `stealth-factory/homebrew-tap` from the published unscoped npm tarball.
 
 ### Release Configuration and Migration
 
-Release versions are calculated by semantic-release; do not run `npm version` or manually edit `CHANGELOG.md`. Use the **Release Pipeline** workflow's manual trigger when a retry is needed, and inspect each job's result.
+Do not run `npm version` or manually edit `CHANGELOG.md`. Dispatch **Release Pipeline** on the tag when a retry is needed, and inspect each job's result.
 
 See [Release Process](../docs/RELEASE_PROCESS.md), [npm Package Name and Ownership](../docs/NPM_SCOPE_MIGRATION.md), and [Homebrew](../docs/HOMEBREW.md) for publishing permissions, package naming, and tap updates.
 

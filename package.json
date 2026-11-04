@@ -62,7 +62,7 @@
     "@octokit/graphql": "^9.0.5",
     "apollo3-cache-persist": "^0.15.0",
     "chalk": "^6.0.0",
-    "dotenv": "^17.4.2",
+    "dotenv": "^18.0.9",
     "env-paths": "^4.0.0",
     "fuse.js": "^7.4.2",
     "graphql": "^16.14.2",

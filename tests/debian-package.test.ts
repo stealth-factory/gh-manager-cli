@@ -2,14 +2,17 @@ import { createHash } from 'node:crypto';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { NAME, checksumLine, pack, stage } from '../debian/package.js';
+import { NAME, build, checksumLine, pack, stage } from '../debian/package.js';
 import { notify, payload } from '../debian/notify-apt.js';
 
 const directories: string[] = [];
+const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 const hasDpkg = spawnSync('dpkg-deb', ['--version'], { encoding: 'utf8' }).status === 0;
+const hasGcc = spawnSync('gcc', ['--version'], { encoding: 'utf8' }).status === 0;
 
 function fixture() {
   const root = mkdtempSync(join(tmpdir(), 'gmc-deb-'));
@@ -118,6 +121,19 @@ describe('Debian package layout', () => {
     expect(members.filter((member) => member !== './').sort()).toEqual(['./control', './md5sums']);
     const checksum = readFileSync(`${deb}.sha256`, 'utf8');
     expect(checksum).toBe(checksumLine(deb, 'gh-manager-cli_1.2.3_amd64.deb'));
+  });
+
+  it.skipIf(!hasDpkg || !hasGcc)('build() packages the executable that reports the manifest version', () => {
+    const version = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8')).version as string;
+    const root = mkdtempSync(join(tmpdir(), 'gmc-deb-build-'));
+    directories.push(root);
+    writeFileSync(join(root, 'version.c'), `#include <stdio.h>\nint main(void){puts("${version}");return 0;}\n`);
+    const bin = join(root, 'bin');
+    mkdirSync(bin);
+    const compiled = spawnSync('gcc', ['-s', '-o', join(bin, NAME), join(root, 'version.c')], { encoding: 'utf8' });
+    expect(compiled.status, compiled.stderr).toBe(0);
+    const deb = build(version, bin, join(root, 'dist'));
+    expect(readFileSync(`${deb}.sha256`, 'utf8')).toBe(checksumLine(deb, `${NAME}_${version}_amd64.deb`));
   });
 });
 

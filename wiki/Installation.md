@@ -26,7 +26,7 @@ Your saved authentication, preferences, and cache use the same application paths
 
 ## APT (Linux amd64)
 
-The signed Stealth Factory apt repository publishes `gh-manager-cli` for Linux amd64 with glibc 2.35 or newer. There is no arm64 package. npm remains available if you already use Node.
+The signed Stealth Factory apt repository publishes `gh-manager-cli` for Linux amd64 with glibc 2.35 or newer. There is no arm64 package. npm remains available if you already use Node. v1.53.4 shipped before this package existed; later releases publish the `.deb`.
 
 Add the repository, then install the package. The key is downloaded into a private directory from `mktemp -d`, so another user cannot replace it between the fingerprint check and `sudo install`. Compare the key's primary fingerprints with the set announced by Stealth Factory before you trust it. `Signed-By` limits this key to this source. Do not use `apt-key`, `trusted=yes`, or turn signature checks off.
 

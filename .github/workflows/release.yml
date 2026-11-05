@@ -23,6 +23,7 @@ on:
       - 'cliff.toml'
       - 'scripts/brew-sha.sh'
       - 'scripts/update-homebrew-formula.js'
+      - 'debian/**'
 
 permissions:
   contents: read
@@ -215,6 +216,21 @@ jobs:
             echo "# Release v${VERSION}" > release_notes.md
           fi
 
+      - name: Build the Debian package
+        env:
+          VERSION: ${{ steps.get_version.outputs.version }}
+        run: |
+          set -euo pipefail
+          src="binaries/gh-manager-cli-linux-x64/gh-manager-cli-linux-x64"
+          if [ ! -s "$src" ]; then
+            echo "::error::Missing Linux binary for the Debian package: $src"
+            exit 1
+          fi
+          mkdir -p deb-bin
+          cp "$src" "deb-bin/gh-manager-cli"
+          chmod 755 "deb-bin/gh-manager-cli"
+          node debian/package.js "$VERSION" deb-bin deb
+
       - name: Create GitHub Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -246,6 +262,8 @@ jobs:
             binaries/gh-manager-cli-linux-x64/gh-manager-cli-linux-x64
             binaries/gh-manager-cli-macos-x64/gh-manager-cli-macos-x64
             binaries/gh-manager-cli-windows-x64/gh-manager-cli-windows-x64.exe
+            "deb/gh-manager-cli_${VERSION}_amd64.deb"
+            "deb/gh-manager-cli_${VERSION}_amd64.deb.sha256"
           )
           for file in "${files[@]}"; do
             if [ ! -s "$file" ]; then
@@ -261,9 +279,10 @@ jobs:
           VERSION: ${{ steps.get_version.outputs.version }}
         run: |
           release=$(gh release view "v${VERSION}" --json isDraft,assets)
-          for name in gh-manager-cli-linux-x64 gh-manager-cli-macos-x64 gh-manager-cli-windows-x64.exe; do
+          for name in gh-manager-cli-linux-x64 gh-manager-cli-macos-x64 gh-manager-cli-windows-x64.exe \
+            "gh-manager-cli_${VERSION}_amd64.deb" "gh-manager-cli_${VERSION}_amd64.deb.sha256"; do
             if ! jq -e --arg name "$name" 'any(.assets[]; .name == $name and .size > 0)' <<< "$release" >/dev/null; then
-              echo "::error::Release is missing binary asset: $name"
+              echo "::error::Release is missing asset: $name"
               exit 1
             fi
           done
@@ -400,3 +419,32 @@ jobs:
             git commit -m "chore: update gh-manager-cli to ${VERSION}"
             git push origin main
           fi
+
+  # Tell stealth-factory/apt-repo that this tag's Debian assets are public.
+  # create-release has already published them. This does not sign or host
+  # the apt repository; it only sends the source, tag, and commit.
+  apt-repository:
+    needs: create-release
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Notify the shared APT repository of this published release
+        env:
+          # Same names as gh-pr-manager. No new secret. An empty value fails
+          # the job rather than dispatching with the default GITHUB_TOKEN,
+          # which cannot write to another repository.
+          GH_TOKEN: ${{ secrets.GH_TOKEN || secrets.RELEASE_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::error::APT repository dispatch requires secrets.GH_TOKEN or secrets.RELEASE_TOKEN"
+            exit 1
+          fi
+          node debian/notify-apt.js

@@ -1,3 +1,13 @@
+## [1.54.0] - 2026-11-05
+
+### Bug Fixes
+
+- Publish gh-manager-cli to the apt repository (#188)
+
+### Features
+
+- Publish a Debian package to the shared apt repository [semantic pr title] (#182)
+
 ## [1.53.4] - 2026-11-04
 
 ### Bug Fixes
